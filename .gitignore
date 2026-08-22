@@ -7,3 +7,9 @@ dist/
 uploads/
 *.db
 .superpowers/
+*.log
+*.err
+/backend/backend.err
+/backend/backend.log
+/frontend/frontend.err
+/frontend/frontend.log

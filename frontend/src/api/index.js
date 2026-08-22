@@ -28,6 +28,9 @@ api.interceptors.response.use(
         case 403:
           ElMessage.error(data.detail || '没有权限执行该操作')
           break
+        case 409:
+          ElMessage.error(data.detail || '数据冲突，操作被拒绝')
+          break
         case 500:
           ElMessage.error('服务器错误')
           break

@@ -43,6 +43,24 @@ def test_delete_patient(client, auth_headers):
     assert get_resp.status_code == 404
 
 
+def test_cannot_delete_patient_with_result(client, auth_headers):
+    """患者已有检测结果时禁止删除（保护科研数据）。"""
+    import io
+    create = client.post("/api/patients", json={"name": "Prot", "gender": "Male", "age": 12}, headers=auth_headers)
+    pid = create.json()["id"]
+    f = io.BytesIO(
+        b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+        b"\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n"
+        b"\xff\xc0\x00\x11\x08\x00\x01\x00\x01\x03\x01\x22\x00\x02\x11\x01\x03"
+        b"\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xd2\xcf\x20\xff\xd9"
+    )
+    up = client.post("/api/images/upload", files={"file": ("p.jpg", f, "image/jpeg")}, data={"patient_id": str(pid)}, headers=auth_headers)
+    img_id = up.json()["id"]
+    client.post(f"/api/images/{img_id}/detect", headers=auth_headers)
+    resp = client.delete(f"/api/patients/{pid}", headers=auth_headers)
+    assert resp.status_code == 409
+
+
 def test_doctor_cannot_edit_others_patient(client, auth_headers, second_doctor_headers):
     """医生不能编辑别的医生录入的患者。"""
     create = client.post("/api/patients", json={"name": "Owner", "gender": "Male", "age": 12}, headers=auth_headers)
@@ -65,3 +83,27 @@ def test_admin_can_delete_any_patient(client, auth_headers, admin_headers):
     pid = create.json()["id"]
     resp = client.delete(f"/api/patients/{pid}", headers=admin_headers)
     assert resp.status_code == 204
+
+
+def test_age_birth_date_mismatch_rejected(client, auth_headers):
+    """年龄与出生日期明显不一致时应返回 400。"""
+    resp = client.post(
+        "/api/patients",
+        json={"name": "Bad", "gender": "Male", "age": 120, "birth_date": "2024-01-01"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 400
+
+
+def test_age_birth_date_consistent_ok(client, auth_headers):
+    """年龄与出生日期一致时应创建成功。"""
+    from datetime import date
+    # 约 12 个月前出生 → 月龄约 12，允许 ±2 容差
+    import datetime as dt
+    birth = dt.date.today().replace(year=dt.date.today().year - 1).isoformat()
+    resp = client.post(
+        "/api/patients",
+        json={"name": "Ok", "gender": "Male", "age": 12, "birth_date": birth},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 201

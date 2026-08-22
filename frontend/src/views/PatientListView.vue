@@ -55,7 +55,10 @@
 
       <!-- 表格 -->
       <div class="table-wrap">
-        <el-table :data="tableData" v-loading="tableLoading" class="patient-table">
+        <template v-if="tableLoading && !tableData.length">
+          <el-skeleton :rows="6" animated class="list-skeleton" />
+        </template>
+        <el-table v-else :data="tableData" v-loading="tableLoading" class="patient-table">
           <template #empty>
             <div class="empty-state">
               <div class="empty-icon">
@@ -118,6 +121,12 @@
                 <el-icon><Clock /></el-icon>
                 <span>{{ formatDateTime(row.last_detect) }}</span>
               </div>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="检测次数" width="90" align="center">
+            <template #default="{ row }">
+              <span class="detect-count">{{ row.detect_count || 0 }}</span>
             </template>
           </el-table-column>
 
@@ -204,6 +213,19 @@
           <el-form-item label="病历号" prop="medical_record_no">
             <el-input v-model="dialogForm.medical_record_no" placeholder="请输入病历号" />
           </el-form-item>
+          <el-form-item label="住院号" prop="hospital_no">
+            <el-input v-model="dialogForm.hospital_no" placeholder="请输入住院号" />
+          </el-form-item>
+          <el-form-item label="检查部位" prop="exam_part">
+            <el-select v-model="dialogForm.exam_part" placeholder="请选择检查部位" clearable style="width: 100%">
+              <el-option label="腹部" value="腹部" />
+              <el-option label="急腹症" value="急腹症" />
+              <el-option label="腹部+盆腔" value="腹部+盆腔" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="出生日期" prop="birth_date">
+            <el-date-picker v-model="dialogForm.birth_date" type="date" value-format="YYYY-MM-DD" placeholder="选择出生日期，自动推算月龄" style="width: 100%" @change="autoFillAgeFromBirth" />
+          </el-form-item>
           <el-form-item label="临床症状" prop="clinical_symptoms">
             <el-input
               v-model="dialogForm.clinical_symptoms"
@@ -245,7 +267,7 @@ import {
   Delete,
 } from '@element-plus/icons-vue'
 import AppLayout from '../components/AppLayout.vue'
-import { getPatients, getPatientStats, createPatient, updatePatient, deletePatient } from '../api/patients'
+import { getPatients, getPatientStats, createPatient, updatePatient, deletePatient, exportPatients } from '../api/patients'
 import { formatDateTime } from '../utils/time'
 
 const router = useRouter()
@@ -306,6 +328,9 @@ const dialogForm = reactive({
   gender: '',
   age: null,
   medical_record_no: '',
+  hospital_no: '',
+  exam_part: '',
+  birth_date: '',
   clinical_symptoms: '',
 })
 
@@ -352,7 +377,20 @@ function resetDialogForm() {
   dialogForm.gender = ''
   dialogForm.age = null
   dialogForm.medical_record_no = ''
+  dialogForm.hospital_no = ''
+  dialogForm.exam_part = ''
+  dialogForm.birth_date = ''
   dialogForm.clinical_symptoms = ''
+}
+
+function autoFillAgeFromBirth(val) {
+  if (!val) return
+  const bd = new Date(val)
+  if (Number.isNaN(bd.getTime())) return
+  const now = new Date()
+  let months = (now.getFullYear() - bd.getFullYear()) * 12 + (now.getMonth() - bd.getMonth())
+  if (now.getDate() < bd.getDate()) months -= 1
+  dialogForm.age = Math.max(0, months)
 }
 
 async function fetchData() {
@@ -392,6 +430,9 @@ function openEdit(row) {
   dialogForm.gender = row.gender
   dialogForm.age = row.age
   dialogForm.medical_record_no = row.medical_record_no ?? ''
+  dialogForm.hospital_no = row.hospital_no ?? ''
+  dialogForm.exam_part = row.exam_part ?? ''
+  dialogForm.birth_date = row.birth_date ?? ''
   dialogForm.clinical_symptoms = row.clinical_symptoms ?? ''
   dialogVisible.value = true
 }
@@ -434,8 +475,20 @@ function handleDetail(id) {
   router.push(`/patients/${id}`)
 }
 
-function handleExport() {
-  ElMessage.info('导出功能开发中')
+async function handleExport() {
+  try {
+    const res = await exportPatients()
+    const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'patients.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success('导出成功')
+  } catch {
+    ElMessage.error('导出失败')
+  }
 }
 
 onMounted(() => {
@@ -609,6 +662,10 @@ onMounted(() => {
 /* 表格包裹 */
 .table-wrap {
   padding: 0 4px;
+  overflow-x: auto; /* 窄屏表格横向滚动，避免内容溢出 */
+}
+.list-skeleton {
+  padding: 20px;
 }
 
 /* 表格样式 */
@@ -729,6 +786,13 @@ onMounted(() => {
 .detect-time .el-icon {
   color: var(--text-muted);
   font-size: 14px;
+}
+
+.detect-count {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
 /* 状态 pill */

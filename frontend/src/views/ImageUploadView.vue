@@ -23,21 +23,6 @@
 
         <div class="card-body">
           <UploadZone @file-selected="onFileSelected" />
-
-          <div v-if="file" class="file-preview">
-            <div class="file-info">
-              <div class="file-icon">
-                <el-icon :size="24"><Document /></el-icon>
-              </div>
-              <div class="file-meta">
-                <div class="file-name">{{ file.name }}</div>
-                <div class="file-size">{{ formatFileSize(file.size) }}</div>
-              </div>
-            </div>
-            <button class="file-remove" @click="file = null">
-              <el-icon><Close /></el-icon>
-            </button>
-          </div>
         </div>
 
         <div class="action-bar">
@@ -47,13 +32,13 @@
           <el-button
             type="primary"
             size="large"
-            :disabled="!file"
+            :disabled="!files.length"
             :loading="uploading"
             @click="handleUpload"
           >
-            <span v-if="uploading && detectProgress > 0">检测中 {{ detectProgress }}%...</span>
+            <span v-if="uploading && files.length > 0">上传检测中 {{ doneCount }}/{{ files.length }}...</span>
             <span v-else-if="uploading">上传检测中...</span>
-            <span v-else>确认上传并检测</span>
+            <span v-else>确认上传并检测（{{ files.length }} 张）</span>
           </el-button>
         </div>
       </div>
@@ -100,12 +85,14 @@ const route = useRoute()
 const router = useRouter()
 
 const patientId = computed(() => route.params.id)
-const file = ref(null)
+const files = ref([])
 const uploading = ref(false)
-const detectProgress = ref(0)
+const detectProgress = ref(0)          // 当前张的检测进度
+const doneCount = ref(0)               // 已完成张数
 
-function onFileSelected(f) {
-  file.value = f
+function onFileSelected(filesList) {
+  files.value = filesList || []
+  doneCount.value = 0
 }
 
 function formatFileSize(bytes) {
@@ -133,29 +120,43 @@ async function waitForTask(taskId) {
   throw new Error('检测超时')
 }
 
+async function detectOne(imageId) {
+  // 提交异步检测任务，轮询进度；任务系统不可用时回退到同步接口
+  const taskRes = await createDetectionTask(imageId)
+  const taskId = taskRes.data?.task_id
+  if (taskId) return waitForTask(taskId)
+  const res = await runDetection(imageId)
+  return res.data
+}
+
 async function handleUpload() {
-  if (!file.value) return
+  if (!files.value.length) return
   uploading.value = true
-  detectProgress.value = 0
+  doneCount.value = 0
+  const results = []
   try {
-    const uploadRes = await uploadImage(patientId.value, file.value)
-    const imageId = uploadRes.data.id ?? uploadRes.data.image_id
-    if (!imageId) {
-      ElMessage.error('上传响应异常')
-      return
+    for (let i = 0; i < files.value.length; i++) {
+      const f = files.value[i]
+      // 逐张上传
+      const uploadRes = await uploadImage(patientId.value, f)
+      const imageId = uploadRes.data.id ?? uploadRes.data.image_id
+      if (!imageId) {
+        ElMessage.error(`第 ${i + 1} 张上传响应异常`)
+        continue
+      }
+      // 逐张检测
+      const result = await detectOne(imageId)
+      const resultId = result?.id ?? result?.result_id
+      if (resultId) results.push(resultId)
+      doneCount.value = i + 1
     }
-    // 提交异步检测任务，轮询进度，避免阻塞请求
-    const taskRes = await createDetectionTask(imageId)
-    const taskId = taskRes.data?.task_id
-    const result = taskId
-      ? await waitForTask(taskId)
-      : await runDetection(imageId) // 后端任务系统不可用时回退到同步接口
-    const resultId = result?.id ?? result?.result_id
-    if (resultId) {
-      ElMessage.success('上传并检测成功')
-      router.push(`/results/${resultId}`)
+
+    if (results.length) {
+      ElMessage.success(`已上传并检测 ${results.length} 张`)
+      // 全部完成后跳到某一张结果页（这里跳到最近一张）
+      router.push(`/results/${results[results.length - 1]}`)
     } else {
-      ElMessage.error('检测响应异常')
+      ElMessage.error('检测均失败或无有效结果')
     }
   } catch (e) {
     ElMessage.error(e?.message || '上传或检测失败')

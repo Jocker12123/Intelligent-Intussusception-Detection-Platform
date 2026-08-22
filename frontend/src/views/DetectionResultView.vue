@@ -7,6 +7,10 @@
         <p class="page-desc">查看AI辅助诊断结果与影像分析详情</p>
       </div>
       <div class="page-header-actions">
+        <el-button @click="handleBack">
+          <el-icon><Back /></el-icon>
+          返回
+        </el-button>
         <el-button type="primary" @click="printVisible = true" v-if="result">
           <el-icon><Printer /></el-icon>
           打印报告
@@ -83,9 +87,9 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Printer, Picture, DataLine } from '@element-plus/icons-vue'
+import { Printer, Picture, DataLine, Back } from '@element-plus/icons-vue'
 import AppLayout from '../components/AppLayout.vue'
 import ImageViewer from '../components/ImageViewer.vue'
 import ResultCard from '../components/ResultCard.vue'
@@ -96,10 +100,18 @@ import { getPatient } from '../api/patients'
 import { formatDateTime } from '../utils/time'
 
 const route = useRoute()
+const router = useRouter()
 const loading = ref(false)
 const result = ref(null)
 const patient = ref(null)
 const printVisible = ref(false)
+
+// 返回患者详情（结果中的影像包含 patient_id）；若无则返回上一页
+function handleBack() {
+  const pid = result.value?.image?.patient_id
+  if (pid) router.push(`/patients/${pid}`)
+  else router.back()
+}
 
 const imageUrl = computed(() => {
   if (result.value && result.value.image_id) {

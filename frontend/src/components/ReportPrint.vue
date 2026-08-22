@@ -52,12 +52,26 @@
           </div>
           <div class="info-row">
             <div class="info-item">
-              <span class="info-label">申请科室：</span>
-              <span class="info-value">小儿外科</span>
+              <span class="info-label">出生日期：</span>
+              <span class="info-value">{{ patient?.birth_date || '-' }}</span>
             </div>
             <div class="info-item">
               <span class="info-label">病 历 号：</span>
               <span class="info-value">{{ patient?.medical_record_no || '-' }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">住 院 号：</span>
+              <span class="info-value">{{ patient?.hospital_no || '-' }}</span>
+            </div>
+          </div>
+          <div class="info-row">
+            <div class="info-item">
+              <span class="info-label">检查部位：</span>
+              <span class="info-value">{{ patient?.exam_part || '-' }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">申请科室：</span>
+              <span class="info-value">小儿外科</span>
             </div>
             <div class="info-item">
               <span class="info-label">床　　号：</span>

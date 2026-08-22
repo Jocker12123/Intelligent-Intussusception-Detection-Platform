@@ -18,6 +18,11 @@ class DetectionService:
         raw = detect_intussusception(image_path)
         inference_ms = round((perf_counter() - t0) * 1000, 2)
         result: DetectionResult = validate_result(raw)
+        # 幂等：若已存在该影像的结果，先删除再重建（保证一对一，支持重新检测）
+        existing = db.query(DetectionResultModel).filter(DetectionResultModel.image_id == image.id).first()
+        if existing:
+            db.delete(existing)
+            db.flush()
         detection = DetectionResultModel(
             image_id=image.id,
             classification=result.classification,

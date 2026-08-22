@@ -8,6 +8,10 @@ export function getPatientStats() {
   return api.get('/patients/stats')
 }
 
+export function exportPatients() {
+  return api.get('/patients/export', { responseType: 'blob' })
+}
+
 export function createPatient(data) {
   return api.post('/patients', data)
 }

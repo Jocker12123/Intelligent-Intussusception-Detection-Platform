@@ -34,6 +34,9 @@ class Patient(Base):
     gender = Column(String(10), nullable=False)
     age = Column(Integer, nullable=False)
     medical_record_no = Column(String(50), nullable=True)
+    hospital_no = Column(String(50), nullable=True)      # 住院号
+    exam_part = Column(String(100), nullable=True)       # 检查部位
+    birth_date = Column(String(20), nullable=True)       # 出生日期(YYYY-MM-DD)
     clinical_symptoms = Column(Text, nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=utcnow)

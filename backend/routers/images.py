@@ -136,12 +136,12 @@ def delete_image(image_id: int, request: Request, db: Session = Depends(get_db),
 
 
 @router.post("/{image_id}/detect", response_model=DetectionResultOut)
-def run_detection(image_id: int, request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def run_detection(image_id: int, request: Request, force: bool = False, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     image = db.query(Image).filter(Image.id == image_id).first()
     if not image:
         raise HTTPException(status_code=404, detail="Image not found")
     existing = db.query(DetectionResultModel).filter(DetectionResultModel.image_id == image_id).first()
-    if existing:
+    if existing and not force:
         return existing
     try:
         result = DetectionService.run_detection(image, db)

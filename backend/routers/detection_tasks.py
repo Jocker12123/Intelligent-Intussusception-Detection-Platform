@@ -13,6 +13,7 @@ router = APIRouter(prefix="/api/detection", tags=["detection"])
 @router.post("/tasks/{image_id}", response_model=DetectionTaskOut, status_code=202)
 def create_detection_task(
     image_id: int,
+    force: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -20,9 +21,9 @@ def create_detection_task(
     image = db.query(Image).filter(Image.id == image_id).first()
     if not image:
         raise HTTPException(status_code=404, detail="Image not found")
-    # 已有结果则直接完成，无需重跑
+    # 已有结果且非强制重跑时直接完成
     existing = db.query(DetectionResultModel).filter(DetectionResultModel.image_id == image_id).first()
-    if existing:
+    if existing and not force:
         return _to_task_out(image_id=image_id, status="done", progress=100, result_id=existing.id)
     task = submit_detection_task(image_id)
     return _to_task_out(image_id=task.image_id, status=task.status, progress=task.progress, result_id=task.result_id, error=task.error, task_id=task.id)

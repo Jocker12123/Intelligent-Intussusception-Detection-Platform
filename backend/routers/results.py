@@ -1,8 +1,13 @@
 from math import ceil
+import csv
+import io
+from datetime import timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from database import get_db
-from models import DetectionResult as DetectionResultModel, User
+from models import DetectionResult as DetectionResultModel, Patient, User
 from schemas import DetectionResultOut, PaginatedResponse, ResultsStats
 from auth import get_current_user
 from .images import _media_type_from_path
@@ -26,18 +31,28 @@ def get_results_stats(
     poor_quality = sum(1 for c, _ in rows if c == "图像质量不佳")
     confs = [conf for _, conf in rows if conf is not None]
     avg_confidence = round(sum(confs) / len(confs), 4) if confs else 0.0
+
+    def _rate(n: int) -> float:
+        return round(n / total, 4) if total else 0.0
+
     return ResultsStats(
         total=total,
         positive=positive,
         negative=negative,
         poor_quality=poor_quality,
         avg_confidence=avg_confidence,
+        positive_rate=_rate(positive),
+        negative_rate=_rate(negative),
+        poor_quality_rate=_rate(poor_quality),
+        confirm_total=total,
     )
 
 
 @router.get("", response_model=PaginatedResponse)
 def list_results(
     patient_id: int = Query(default=None),
+    patient_search: str = Query(default=""),
+    classification: str = Query(default=""),
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -46,11 +61,66 @@ def list_results(
     query = db.query(DetectionResultModel)
     if patient_id is not None:
         query = query.filter(DetectionResultModel.image.has(patient_id=patient_id))
+    if patient_search:
+        pattern = f"%{patient_search}%"
+        query = query.filter(DetectionResultModel.image.has(
+            Patient.name.like(pattern) | Patient.medical_record_no.like(pattern)
+        ))
+    if classification:
+        query = query.filter(DetectionResultModel.classification == classification)
     total = query.count()
     items = query.order_by(DetectionResultModel.created_at.desc()).offset((page - 1) * size).limit(size).all()
     return PaginatedResponse(
         items=[DetectionResultOut.model_validate(r) for r in items],
         total=total, page=page, size=size, pages=max(1, ceil(total / size)),
+    )
+
+
+@router.get("/export")
+def export_results(
+    patient_id: int = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """导出检测记录为 CSV（支持按患者筛选）。"""
+    query = db.query(DetectionResultModel)
+    if patient_id is not None:
+        query = query.filter(DetectionResultModel.image.has(patient_id=patient_id))
+    items = query.order_by(DetectionResultModel.created_at.desc()).all()
+
+    buf = io.StringIO()
+    # 写入 UTF-8 BOM，避免 Excel 打开时中文乱码
+    buf.write("\ufeff")
+    writer = csv.writer(buf)
+    writer.writerow([
+        "ID", "患者", "性别", "年龄(月)", "病历号",
+        "分类", "置信度", "严重度", "成功率", "治疗建议",
+        "模型", "版本", "检测时间(UTC)",
+    ])
+    for r in items:
+        patient = r.image.patient if r.image and r.image.patient else None
+        created = r.created_at.replace(tzinfo=timezone.utc).isoformat() if r.created_at else ""
+        writer.writerow([
+            r.id,
+            patient.name if patient else "",
+            patient.gender if patient else "",
+            patient.age if patient else "",
+            (patient.medical_record_no or "") if patient else "",
+            r.classification,
+            r.confidence,
+            r.severity or "",
+            r.treatment_success_rate if r.treatment_success_rate is not None else "",
+            r.treatment_advice or "",
+            r.model_name or "",
+            r.model_version or "",
+            created,
+        ])
+    buf.seek(0)
+
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="results.csv"'},
     )
 
 

@@ -33,17 +33,35 @@
           </div>
           <h3>检测记录列表</h3>
         </div>
+        <el-button :icon="Download" @click="handleExport" :loading="exporting">导出 CSV</el-button>
+      </div>
+
+      <!-- 筛选工具栏 -->
+      <div class="filter-bar">
+        <div class="filter-search">
+          <el-icon class="search-icon"><Search /></el-icon>
+          <el-input v-model="search" placeholder="按患者姓名搜索..." clearable @keyup.enter="handleSearch" />
+        </div>
+        <el-select v-model="classification" placeholder="按诊断分类筛选" clearable style="width: 180px" @change="handleSearch">
+          <el-option label="肠套叠阳性" value="肠套叠阳性" />
+          <el-option label="肠套叠阴性" value="肠套叠阴性" />
+          <el-option label="图像质量不佳" value="图像质量不佳" />
+        </el-select>
       </div>
 
       <div class="table-wrap">
-        <el-table :data="tableData" v-loading="loading" class="history-table">
+        <template v-if="loading && !tableData.length">
+          <el-skeleton :rows="6" animated class="list-skeleton" />
+        </template>
+        <el-table v-else :data="tableData" v-loading="loading" class="history-table">
           <template #empty>
             <div class="empty-state">
               <div class="empty-icon">
                 <el-icon :size="48"><Document /></el-icon>
               </div>
-              <p class="empty-title">暂无检测记录</p>
-              <p class="empty-desc">上传超声影像后将自动生成检测记录</p>
+              <p class="empty-title">{{ search || classification ? '未找到符合条件的记录' : '暂无检测记录' }}</p>
+              <p class="empty-desc">{{ search || classification ? '调整筛选条件后重试' : '上传超声影像后将自动生成检测记录' }}</p>
+              <el-button v-if="!search && !classification" type="primary" @click="$router.push('/patients')">前往患者管理</el-button>
             </div>
           </template>
 
@@ -124,9 +142,9 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Document, Warning, Select, DataLine, Clock, View } from '@element-plus/icons-vue'
+import { Document, Warning, Select, DataLine, Clock, View, Download, Search } from '@element-plus/icons-vue'
 import AppLayout from '../components/AppLayout.vue'
-import { getResults, getResultsStats } from '../api/results'
+import { getResults, getResultsStats, exportResults } from '../api/results'
 import { formatDateTime } from '../utils/time'
 
 const loading = ref(false)
@@ -134,6 +152,9 @@ const tableData = ref([])
 const page = ref(1)
 const size = ref(10)
 const total = ref(0)
+const exporting = ref(false)
+const search = ref('')
+const classification = ref('')
 
 const stats = ref({
   total: 0,
@@ -141,7 +162,13 @@ const stats = ref({
   negative: 0,
   poor_quality: 0,
   avg_confidence: 0,
+  positive_rate: 0,
+  negative_rate: 0,
+  poor_quality_rate: 0,
+  confirm_total: 0,
 })
+
+const pct = (v) => Math.round((v || 0) * 100) + '%'
 
 const statItems = computed(() => [
   {
@@ -151,20 +178,20 @@ const statItems = computed(() => [
     color: 'var(--primary)',
   },
   {
-    label: '阳性病例',
+    label: `阳性病例 (${pct(stats.value.positive_rate)})`,
     value: stats.value.positive,
     icon: Warning,
     color: 'var(--danger)',
   },
   {
-    label: '阴性病例',
+    label: `阴性病例 (${pct(stats.value.negative_rate)})`,
     value: stats.value.negative,
     icon: Select,
     color: 'var(--success)',
   },
   {
     label: '平均置信度',
-    value: Math.round((stats.value.avg_confidence || 0) * 100) + '%',
+    value: pct(stats.value.avg_confidence),
     icon: DataLine,
     color: 'var(--warning)',
   },
@@ -193,7 +220,10 @@ function confidenceColor(val) {
 async function fetchData() {
   loading.value = true
   try {
-    const res = await getResults({ page: page.value, size: size.value })
+    const params = { page: page.value, size: size.value }
+    if (search.value) params.patient_search = search.value
+    if (classification.value) params.classification = classification.value
+    const res = await getResults(params)
     tableData.value = res.data.items ?? res.data.data ?? res.data
     total.value = res.data.total ?? 0
     const statsRes = await getResultsStats()
@@ -202,6 +232,30 @@ async function fetchData() {
     ElMessage.error('获取检测记录失败')
   } finally {
     loading.value = false
+  }
+}
+
+function handleSearch() {
+  page.value = 1
+  fetchData()
+}
+
+async function handleExport() {
+  exporting.value = true
+  try {
+    const res = await exportResults({})
+    const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'results.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success('导出成功')
+  } catch {
+    ElMessage.error('导出失败')
+  } finally {
+    exporting.value = false
   }
 }
 
@@ -316,6 +370,33 @@ onMounted(fetchData)
   align-items: center;
   gap: 10px;
 }
+
+/* 筛选工具栏 */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border-color);
+  flex-wrap: wrap;
+}
+.filter-search {
+  position: relative;
+  width: 320px;
+}
+.filter-search .search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 16px;
+  z-index: 1;
+  pointer-events: none;
+}
+.filter-search :deep(.el-input__wrapper) {
+  padding-left: 36px !important;
+}
 .card-icon {
   width: 32px;
   height: 32px;
@@ -338,8 +419,11 @@ onMounted(fetchData)
 /* 表格 */
 .table-wrap {
   padding: 0 4px;
+  overflow-x: auto; /* 窄屏表格横向滚动，避免内容溢出 */
 }
-.history-table :deep(.el-table__header-wrapper th.el-table__cell) {
+.list-skeleton {
+  padding: 20px;
+}.history-table :deep(.el-table__header-wrapper th.el-table__cell) {
   background: var(--bg-page) !important;
   color: var(--text-secondary) !important;
   font-weight: 600 !important;
@@ -531,6 +615,13 @@ onMounted(fetchData)
   .pagination-bar {
     flex-direction: column;
     gap: 12px;
+  }
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .filter-search {
+    width: 100%;
   }
 }
 </style>

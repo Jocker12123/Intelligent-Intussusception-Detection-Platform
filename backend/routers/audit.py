@@ -98,6 +98,8 @@ def export_audit_logs(
     items = query.order_by(AuditLog.created_at.desc()).all()
 
     buf = io.StringIO()
+    # 写入 UTF-8 BOM，避免 Excel 打开时中文乱码
+    buf.write("\ufeff")
     writer = csv.writer(buf)
     writer.writerow(["ID", "时间(UTC)", "操作人", "操作", "对象", "对象ID", "详情", "来源IP"])
     for r in items:

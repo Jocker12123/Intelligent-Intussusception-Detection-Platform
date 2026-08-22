@@ -20,6 +20,11 @@ async def lifespan(app: FastAPI):
         "inference_ms": "FLOAT",
         "class_probabilities": "TEXT",
     })
+    ensure_columns("patients", {
+        "hospital_no": "VARCHAR(50)",
+        "exam_part": "VARCHAR(100)",
+        "birth_date": "VARCHAR(20)",
+    })
     db = SessionLocal()
     try:
         if db.query(User).count() == 0:

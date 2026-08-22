@@ -1,7 +1,7 @@
 <template>
   <div
     class="upload-zone"
-    :class="{ 'is-dragover': isDragover, 'has-file': selectedFile }"
+    :class="{ 'is-dragover': isDragover, 'has-file': files.length }"
     @click="triggerInput"
     @dragover.prevent="onDragOver"
     @dragleave.prevent="onDragLeave"
@@ -11,11 +11,12 @@
       ref="fileInputRef"
       type="file"
       accept="image/jpeg,image/png,image/bmp,.dcm"
+      multiple
       hidden
       @change="onFileChange"
     />
 
-    <template v-if="!selectedFile">
+    <template v-if="!files.length">
       <div class="upload-illustration">
         <div class="upload-ring">
           <el-icon class="upload-icon"><UploadFilled /></el-icon>
@@ -23,7 +24,7 @@
         <div class="upload-dots" />
       </div>
       <p class="upload-text">拖拽超声影像到此处，或点击选择文件</p>
-      <p class="upload-hint">支持 JPG / PNG / BMP / DICOM 格式，单文件不超过 20MB</p>
+      <p class="upload-hint">支持 JPG / PNG / BMP / DICOM 格式，可一次选择多张，单文件不超过 20MB</p>
       <div class="upload-formats">
         <span class="format-tag">JPG</span>
         <span class="format-tag">PNG</span>
@@ -34,37 +35,46 @@
     </template>
 
     <template v-else>
-      <div class="preview-area">
-        <img v-if="previewUrl" :src="previewUrl" class="preview-image" />
-        <div class="preview-overlay">
-          <div class="preview-info">
-            <p class="preview-filename">{{ selectedFile.name }}</p>
-            <p class="preview-size">{{ formatSize(selectedFile.size) }}</p>
+      <div class="file-list">
+        <div v-for="(f, idx) in files" :key="f.uid" class="file-item">
+          <div class="file-thumb">
+            <img v-if="f.previewUrl" :src="f.previewUrl" class="thumb-img" alt="" />
+            <el-icon v-else class="thumb-icon"><Document /></el-icon>
           </div>
-          <el-button size="small" type="primary" text bg @click.stop="clearFile">
-            <el-icon><Refresh /></el-icon>
-            重新选择
-          </el-button>
+          <div class="file-meta">
+            <div class="file-name">{{ f.name }}</div>
+            <div class="file-size">{{ formatSize(f.size) }}</div>
+          </div>
+          <button class="file-remove" type="button" title="移除" @click.stop="removeFile(idx)">
+            <el-icon><Close /></el-icon>
+          </button>
         </div>
+      </div>
+      <div class="file-actions">
+        <el-button size="small" @click.stop="clearFiles">
+          <el-icon><Refresh /></el-icon>
+          清空
+        </el-button>
+        <span class="file-count">已选 {{ files.length }} 张</span>
       </div>
     </template>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { UploadFilled, Refresh } from '@element-plus/icons-vue'
+import { UploadFilled, Refresh, Document, Close } from '@element-plus/icons-vue'
 
 const emit = defineEmits(['file-selected'])
 
 const isDragover = ref(false)
-const selectedFile = ref(null)
-const previewUrl = ref(null)
+const files = ref([])
 const fileInputRef = ref(null)
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/bmp', 'application/dicom']
 const MAX_SIZE = 20 * 1024 * 1024
+let uid = 0
 
 function formatSize(bytes) {
   if (!bytes) return '0 B'
@@ -76,24 +86,43 @@ function formatSize(bytes) {
 function validateFile(file) {
   const ext = file.name.split('.').pop().toLowerCase()
   if (!ALLOWED_TYPES.includes(file.type) && ext !== 'dcm') {
-    ElMessage.error('不支持的文件类型，请上传 JPG/PNG/BMP/DICOM 文件')
+    ElMessage.error(`不支持的文件类型：${file.name}`)
     return false
   }
   if (file.size > MAX_SIZE) {
-    ElMessage.error('文件大小超过 20MB 限制')
+    ElMessage.error(`文件超过 20MB 限制：${file.name}`)
     return false
   }
   return true
 }
 
-function handleFile(file) {
-  if (!validateFile(file)) return
-  if (previewUrl.value) {
-    URL.revokeObjectURL(previewUrl.value)
+function addFiles(fileList) {
+  const arr = Array.from(fileList || [])
+  for (const file of arr) {
+    if (!validateFile(file)) continue
+    // 支持图片预览；DICOM 等无法直接用 img 显示的用占位图标
+    const previewUrl = file.type === 'image/jpeg' || file.type === 'image/png' || file.type === 'image/bmp'
+      ? URL.createObjectURL(file)
+      : ''
+    files.value.push({ uid: ++uid, file, name: file.name, size: file.size, previewUrl })
   }
-  selectedFile.value = file
-  previewUrl.value = URL.createObjectURL(file)
-  emit('file-selected', file)
+  emit('file-selected', files.value.map((f) => f.file))
+}
+
+function removeFile(idx) {
+  const f = files.value[idx]
+  if (f && f.previewUrl) URL.revokeObjectURL(f.previewUrl)
+  files.value.splice(idx, 1)
+  emit('file-selected', files.value.map((x) => x.file))
+}
+
+function clearFiles() {
+  for (const f of files.value) {
+    if (f.previewUrl) URL.revokeObjectURL(f.previewUrl)
+  }
+  files.value = []
+  if (fileInputRef.value) fileInputRef.value.value = ''
+  emit('file-selected', [])
 }
 
 function triggerInput() {
@@ -101,8 +130,8 @@ function triggerInput() {
 }
 
 function onFileChange(e) {
-  const file = e.target.files[0]
-  if (file) handleFile(file)
+  addFiles(e.target.files)
+  e.target.value = ''
 }
 
 function onDragOver() {
@@ -115,32 +144,25 @@ function onDragLeave() {
 
 function onDrop(e) {
   isDragover.value = false
-  const file = e.dataTransfer.files[0]
-  if (file) handleFile(file)
+  addFiles(e.dataTransfer.files)
 }
 
-function clearFile() {
-  if (previewUrl.value) {
-    URL.revokeObjectURL(previewUrl.value)
+onUnmounted(() => {
+  for (const f of files.value) {
+    if (f.previewUrl) URL.revokeObjectURL(f.previewUrl)
   }
-  selectedFile.value = null
-  previewUrl.value = null
-  if (fileInputRef.value) {
-    fileInputRef.value.value = ''
-  }
-  emit('file-selected', null)
-}
+})
 </script>
 
 <style scoped>
 .upload-zone {
   border: 2px dashed var(--border-color);
   border-radius: var(--radius-lg);
-  padding: 40px 24px;
+  padding: 36px 24px;
   text-align: center;
   cursor: pointer;
   transition: all 0.3s ease;
-  min-height: 280px;
+  min-height: 240px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -149,26 +171,22 @@ function clearFile() {
   position: relative;
   overflow: hidden;
 }
-
 .upload-zone:hover {
   border-color: var(--primary);
   background: var(--bg-hover);
 }
-
 .upload-zone.is-dragover {
   border-color: var(--primary);
   background: var(--primary-glow);
   transform: scale(1.01);
 }
 
-/* 插图 */
 .upload-illustration {
   position: relative;
   width: 80px;
   height: 80px;
   margin-bottom: 16px;
 }
-
 .upload-ring {
   width: 80px;
   height: 80px;
@@ -180,12 +198,10 @@ function clearFile() {
   position: relative;
   z-index: 1;
 }
-
 .upload-icon {
   font-size: 32px;
   color: var(--primary);
 }
-
 .upload-dots {
   position: absolute;
   top: -8px;
@@ -197,33 +213,27 @@ function clearFile() {
   opacity: 0.5;
 }
 
-/* 文字 */
 .upload-text {
   margin: 0 0 6px;
   font-size: 15px;
   color: var(--text-primary);
   font-weight: 600;
 }
-
 .upload-hint {
   margin: 0 0 16px;
   font-size: 13px;
   color: var(--text-muted);
 }
-
 .upload-dicom-note {
   margin: 10px 0 0;
   font-size: 12px;
   color: var(--warning);
 }
-
-/* 格式标签 */
 .upload-formats {
   display: flex;
   gap: 8px;
   justify-content: center;
 }
-
 .format-tag {
   padding: 3px 10px;
   border-radius: 4px;
@@ -234,48 +244,90 @@ function clearFile() {
   border: 1px solid var(--border-color);
 }
 
-/* 预览区域 */
-.preview-area {
-  position: relative;
+/* 多文件列表 */
+.file-list {
   width: 100%;
-  max-width: 400px;
-}
-
-.preview-image {
-  width: 100%;
-  max-height: 320px;
-  object-fit: contain;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
-  background: var(--bg-page);
-}
-
-.preview-overlay {
-  margin-top: 14px;
+  max-width: 480px;
   display: flex;
   flex-direction: column;
+  gap: 10px;
+  text-align: left;
+}
+.file-item {
+  display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
 }
-
-.preview-info {
-  text-align: center;
+.file-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-page);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
 }
-
-.preview-filename {
-  margin: 0 0 2px;
+.thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.thumb-icon {
+  font-size: 22px;
+  color: var(--primary);
+}
+.file-meta {
+  flex: 1;
+  min-width: 0;
+}
+.file-name {
   font-size: 14px;
-  color: var(--text-primary);
   font-weight: 600;
-  max-width: 300px;
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-.preview-size {
-  margin: 0;
+.file-size {
   font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.file-remove {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+.file-remove:hover {
+  background: var(--bg-tag-danger);
+  color: var(--danger);
+}
+.file-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 480px;
+  margin-top: 12px;
+}
+.file-count {
+  font-size: 13px;
   color: var(--text-muted);
 }
 </style>

@@ -40,6 +40,9 @@ class PatientCreate(BaseModel):
     gender: str
     age: int
     medical_record_no: Optional[str] = None
+    hospital_no: Optional[str] = None
+    exam_part: Optional[str] = None
+    birth_date: Optional[str] = None
     clinical_symptoms: Optional[str] = None
 
 
@@ -48,6 +51,9 @@ class PatientUpdate(BaseModel):
     gender: Optional[str] = None
     age: Optional[int] = None
     medical_record_no: Optional[str] = None
+    hospital_no: Optional[str] = None
+    exam_part: Optional[str] = None
+    birth_date: Optional[str] = None
     clinical_symptoms: Optional[str] = None
 
 
@@ -57,6 +63,9 @@ class PatientOut(BaseModel):
     gender: str
     age: int
     medical_record_no: Optional[str] = None
+    hospital_no: Optional[str] = None
+    exam_part: Optional[str] = None
+    birth_date: Optional[str] = None
     clinical_symptoms: Optional[str] = None
     created_at: datetime
 
@@ -70,6 +79,7 @@ class PatientOut(BaseModel):
 class PatientListItem(PatientOut):
     status: str = ""
     last_detect: Optional[str] = None
+    detect_count: int = 0
 
     model_config = {"from_attributes": True}
 
@@ -186,6 +196,10 @@ class ResultsStats(BaseModel):
     negative: int = 0
     poor_quality: int = 0
     avg_confidence: float = 0.0
+    positive_rate: float = 0.0     # 阳性占比 (0-1)
+    negative_rate: float = 0.0     # 阴性占比 (0-1)
+    poor_quality_rate: float = 0.0 # 质量不佳占比 (0-1)
+    confirm_total: int = 0         # 已产生检测结果的影像数
 
 
 class AuditLogOut(BaseModel):

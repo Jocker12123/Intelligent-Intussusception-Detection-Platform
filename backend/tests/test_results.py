@@ -43,6 +43,16 @@ def test_get_results_stats(client, auth_headers):
     assert "negative" in data
     assert "avg_confidence" in data
     assert 0.0 <= data["avg_confidence"] <= 1.0
+    assert 0.0 <= data["positive_rate"] <= 1.0
+    assert 0.0 <= data["negative_rate"] <= 1.0
+
+
+def test_export_results_csv(client, auth_headers):
+    _setup(client, auth_headers)
+    resp = client.get("/api/results/export", headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/csv")
+    assert "患者" in resp.text and "分类" in resp.text
 
 
 def test_async_detection_task_with_existing_result(client, auth_headers):
