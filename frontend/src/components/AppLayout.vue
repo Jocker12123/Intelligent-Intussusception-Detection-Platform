@@ -12,7 +12,7 @@
           <span class="toggle-label">{{ currentTheme === 'modern' ? '手稿' : '现代' }}</span>
         </button>
         <div class="user-divider" />
-        <span class="app-user">{{ auth.user?.display_name || auth.user?.username }}</span>
+        <span class="app-user">{{ auth.user?.full_name || auth.user?.username }}</span>
         <el-button text class="logout-btn" @click="handleLogout">
           退出登录
         </el-button>
@@ -32,6 +32,10 @@
           <el-menu-item index="/history">
             <el-icon><Clock /></el-icon>
             <span>检测记录</span>
+          </el-menu-item>
+          <el-menu-item v-if="isAdmin" index="/audit">
+            <el-icon><Document /></el-icon>
+            <span>审计日志</span>
           </el-menu-item>
         </el-menu>
         <div class="hospital-sidebar-brand">
@@ -59,13 +63,15 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useSettingsStore } from '../stores/settings'
 import { toggleTheme, getCurrentTheme } from '../utils/theme'
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { Document } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 const settings = useSettingsStore()
 const currentTheme = ref(getCurrentTheme())
+const isAdmin = computed(() => auth.user?.role === 'admin')
 
 function handleToggleTheme() {
   const next = toggleTheme()

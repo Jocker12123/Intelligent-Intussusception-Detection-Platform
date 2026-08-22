@@ -88,7 +88,7 @@
             <template #default="{ row }">
               <div class="detect-time">
                 <el-icon><Clock /></el-icon>
-                <span>{{ row.created_at }}</span>
+                <span>{{ formatDateTime(row.created_at) }}</span>
               </div>
             </template>
           </el-table-column>
@@ -126,7 +126,8 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Document, Warning, Select, DataLine, Clock, View } from '@element-plus/icons-vue'
 import AppLayout from '../components/AppLayout.vue'
-import { getResults } from '../api/results'
+import { getResults, getResultsStats } from '../api/results'
+import { formatDateTime } from '../utils/time'
 
 const loading = ref(false)
 const tableData = ref([])
@@ -134,40 +135,36 @@ const page = ref(1)
 const size = ref(10)
 const total = ref(0)
 
-const positiveCount = computed(() =>
-  tableData.value.filter((r) => r.classification === '肠套叠阳性').length
-)
-const negativeCount = computed(() =>
-  tableData.value.filter((r) => r.classification === '肠套叠阴性').length
-)
-const avgConfidence = computed(() => {
-  const vals = tableData.value.map((r) => r.confidence).filter((v) => v != null)
-  if (vals.length === 0) return 0
-  return vals.reduce((a, b) => a + b, 0) / vals.length
+const stats = ref({
+  total: 0,
+  positive: 0,
+  negative: 0,
+  poor_quality: 0,
+  avg_confidence: 0,
 })
 
 const statItems = computed(() => [
   {
     label: '总检测数',
-    value: tableData.value.length,
+    value: stats.value.total,
     icon: Document,
     color: 'var(--primary)',
   },
   {
     label: '阳性病例',
-    value: positiveCount.value,
+    value: stats.value.positive,
     icon: Warning,
     color: 'var(--danger)',
   },
   {
     label: '阴性病例',
-    value: negativeCount.value,
+    value: stats.value.negative,
     icon: Select,
     color: 'var(--success)',
   },
   {
     label: '平均置信度',
-    value: (avgConfidence.value * 100).toFixed(0) + '%',
+    value: Math.round((stats.value.avg_confidence || 0) * 100) + '%',
     icon: DataLine,
     color: 'var(--warning)',
   },
@@ -199,6 +196,8 @@ async function fetchData() {
     const res = await getResults({ page: page.value, size: size.value })
     tableData.value = res.data.items ?? res.data.data ?? res.data
     total.value = res.data.total ?? 0
+    const statsRes = await getResultsStats()
+    stats.value = statsRes.data
   } catch {
     ElMessage.error('获取检测记录失败')
   } finally {

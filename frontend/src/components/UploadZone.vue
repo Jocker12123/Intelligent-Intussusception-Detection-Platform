@@ -30,6 +30,7 @@
         <span class="format-tag">BMP</span>
         <span class="format-tag">DICOM</span>
       </div>
+      <p class="upload-dicom-note">DICOM 文件由算法侧解析用于诊断，浏览器暂不支持在线预览。</p>
     </template>
 
     <template v-else>
@@ -208,6 +209,12 @@ function clearFile() {
   margin: 0 0 16px;
   font-size: 13px;
   color: var(--text-muted);
+}
+
+.upload-dicom-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--warning);
 }
 
 /* 格式标签 */

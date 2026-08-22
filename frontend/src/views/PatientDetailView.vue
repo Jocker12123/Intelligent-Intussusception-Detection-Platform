@@ -43,7 +43,7 @@
                 </div>
                 <div class="meta-row">
                   <span class="meta-label"><el-icon><Clock /></el-icon>录入时间</span>
-                  <span class="meta-value">{{ patient.created_at }}</span>
+                  <span class="meta-value">{{ formatDateTimeCn(patient.created_at) }}</span>
                 </div>
               </div>
 
@@ -131,7 +131,7 @@
                     <template #default="{ row }">
                       <div class="detect-time">
                         <el-icon><Clock /></el-icon>
-                        <span>{{ row.uploaded_at }}</span>
+                        <span>{{ formatDateTime(row.uploaded_at) }}</span>
                       </div>
                     </template>
                   </el-table-column>
@@ -181,7 +181,7 @@
 
     <!-- 影像预览 -->
     <el-dialog v-model="previewVisible" title="影像预览" width="700px" append-to-body class="preview-dialog">
-      <ImageViewer v-if="previewSrc" :src="previewSrc" />
+      <ImageViewer v-if="previewSrc" :src="previewSrc" :media-type="previewMediaType" />
     </el-dialog>
 
     <!-- 打印报告 -->
@@ -191,7 +191,7 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
   Printer,
@@ -210,15 +210,18 @@ import AppLayout from '../components/AppLayout.vue'
 import ImageViewer from '../components/ImageViewer.vue'
 import ReportPrint from '../components/ReportPrint.vue'
 import { getPatient } from '../api/patients'
-import { getImageInfo, getImageUrl, runDetection } from '../api/images'
+import { getImageInfo, getImageUrl, runDetection, createDetectionTask, getDetectionTask } from '../api/images'
 import { getResult } from '../api/results'
+import { formatDateTime, formatDateTimeCn } from '../utils/time'
 
 const route = useRoute()
+const router = useRouter()
 const loading = ref(false)
 const patient = ref(null)
 const images = ref([])
 const previewVisible = ref(false)
 const previewSrc = ref('')
+const previewMediaType = ref('')
 const printVisible = ref(false)
 const printResult = ref(null)
 const printImageUrl = ref('')
@@ -256,9 +259,9 @@ async function fetchPatient() {
         patient.value.images.map(async (img) => {
           try {
             const infoRes = await getImageInfo(img.id)
-            return { ...img, has_result: infoRes.data.has_result, result_id: infoRes.data.result_id }
+            return { ...img, has_result: infoRes.data.has_result, result_id: infoRes.data.result_id, media_type: infoRes.data.media_type }
           } catch {
-            return { ...img, has_result: false, result_id: null }
+            return { ...img, has_result: false, result_id: null, media_type: '' }
           }
         })
       )
@@ -272,20 +275,40 @@ async function fetchPatient() {
 
 function previewImage(row) {
   previewSrc.value = getImageUrl(row.id)
+  previewMediaType.value = row.media_type || ''
   previewVisible.value = true
 }
 
 async function handleDetect(row) {
   try {
-    const res = await runDetection(row.id)
-    const resultId = res.data.id ?? res.data.result_id
+    // 使用异步任务 + 轮询，避免真实模型推理阻塞请求
+    const taskRes = await createDetectionTask(row.id)
+    const taskId = taskRes.data?.task_id
+    let result
+    if (taskId) {
+      for (let i = 0; i < 180; i++) {
+        const statusRes = await getDetectionTask(taskId)
+        const t = statusRes.data?.task
+        if (!t) break
+        if (t.status === 'done') { result = statusRes.data?.result || { id: t.result_id }; break }
+        if (t.status === 'failed') throw new Error(t.error || '检测失败')
+        await new Promise((r) => setTimeout(r, 800))
+      }
+      if (!result) throw new Error('检测超时')
+    } else {
+      // 回退到同步接口
+      const res = await runDetection(row.id)
+      result = res.data
+    }
+    const resultId = result?.id ?? result?.result_id
     if (resultId) {
       ElMessage.success('检测完成')
-      const router = (await import('vue-router')).useRouter()
       router.push(`/results/${resultId}`)
+    } else {
+      ElMessage.error('检测返回异常')
     }
-  } catch {
-    ElMessage.error('检测失败')
+  } catch (e) {
+    ElMessage.error(e?.message || '检测失败')
   }
 }
 

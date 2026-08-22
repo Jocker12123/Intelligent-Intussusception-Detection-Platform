@@ -51,7 +51,8 @@
             :loading="uploading"
             @click="handleUpload"
           >
-            <span v-if="uploading">上传检测中...</span>
+            <span v-if="uploading && detectProgress > 0">检测中 {{ detectProgress }}%...</span>
+            <span v-else-if="uploading">上传检测中...</span>
             <span v-else>确认上传并检测</span>
           </el-button>
         </div>
@@ -93,7 +94,7 @@ import { ElMessage } from 'element-plus'
 import { Upload, Document, Close, InfoFilled } from '@element-plus/icons-vue'
 import AppLayout from '../components/AppLayout.vue'
 import UploadZone from '../components/UploadZone.vue'
-import { uploadImage, runDetection } from '../api/images'
+import { uploadImage, runDetection, createDetectionTask, getDetectionTask } from '../api/images'
 
 const route = useRoute()
 const router = useRouter()
@@ -101,6 +102,7 @@ const router = useRouter()
 const patientId = computed(() => route.params.id)
 const file = ref(null)
 const uploading = ref(false)
+const detectProgress = ref(0)
 
 function onFileSelected(f) {
   file.value = f
@@ -113,9 +115,28 @@ function formatFileSize(bytes) {
   return (bytes / (1024 * 1024)).toFixed(2) + ' MB'
 }
 
+async function waitForTask(taskId) {
+  // 轮询任务状态，直到完成或失败
+  for (let i = 0; i < 180; i++) {
+    const res = await getDetectionTask(taskId)
+    const t = res.data?.task
+    if (!t) return null
+    detectProgress.value = t.progress || 0
+    if (t.status === 'done') {
+      return res.data?.result || { id: t.result_id }
+    }
+    if (t.status === 'failed') {
+      throw new Error(t.error || '检测失败')
+    }
+    await new Promise((r) => setTimeout(r, 800))
+  }
+  throw new Error('检测超时')
+}
+
 async function handleUpload() {
   if (!file.value) return
   uploading.value = true
+  detectProgress.value = 0
   try {
     const uploadRes = await uploadImage(patientId.value, file.value)
     const imageId = uploadRes.data.id ?? uploadRes.data.image_id
@@ -123,20 +144,26 @@ async function handleUpload() {
       ElMessage.error('上传响应异常')
       return
     }
-    const detectRes = await runDetection(imageId)
-    const resultId = detectRes.data.id ?? detectRes.data.result_id
+    // 提交异步检测任务，轮询进度，避免阻塞请求
+    const taskRes = await createDetectionTask(imageId)
+    const taskId = taskRes.data?.task_id
+    const result = taskId
+      ? await waitForTask(taskId)
+      : await runDetection(imageId) // 后端任务系统不可用时回退到同步接口
+    const resultId = result?.id ?? result?.result_id
     if (resultId) {
       ElMessage.success('上传并检测成功')
       router.push(`/results/${resultId}`)
     } else {
       ElMessage.error('检测响应异常')
     }
-  } catch {
-    ElMessage.error('上传或检测失败')
+  } catch (e) {
+    ElMessage.error(e?.message || '上传或检测失败')
   } finally {
     uploading.value = false
   }
 }
+
 </script>
 
 <style scoped>

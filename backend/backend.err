@@ -1,0 +1,62 @@
+INFO:     Will watch for changes in these directories: ['C:\\Users\\卿\\workspace\\intussusception-platform\\backend']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [15884] using WatchFiles
+C:\Users\卿\workspace\intussusception-platform\backend\schemas.py:144: UserWarning: `_ser_created_at` overrides an existing Pydantic `@field_serializer` decorator
+  def _ser_created_at(self, v: datetime) -> str:
+INFO:     Started server process [3328]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。
+WARNING:  JWT_SECRET_KEY 未设置，正在使用开发占位密钥，请勿用于生产环境。

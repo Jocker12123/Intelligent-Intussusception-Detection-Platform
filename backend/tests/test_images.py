@@ -28,6 +28,14 @@ def test_upload_bad_type(client, auth_headers):
     assert resp.status_code == 400
 
 
+def test_upload_content_spoof(client, auth_headers):
+    """声明为 jpg 但真实内容是 PNG，应被字节级校验拒绝。"""
+    pid = _mk_patient(client, auth_headers)
+    png_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+    resp = client.post("/api/images/upload", files={"file": ("x.png", io.BytesIO(png_bytes), "image/jpeg")}, data={"patient_id": str(pid)}, headers=auth_headers)
+    assert resp.status_code == 400
+
+
 def test_get_image_info(client, auth_headers):
     pid = _mk_patient(client, auth_headers)
     f, fn = _fake_jpg()
@@ -44,6 +52,16 @@ def test_delete_image(client, auth_headers):
     img_id = up.json()["id"]
     resp = client.delete(f"/api/images/{img_id}", headers=auth_headers)
     assert resp.status_code == 204
+
+
+def test_doctor_cannot_delete_others_image(client, auth_headers, second_doctor_headers):
+    """医生不能删除别的医生上传的影像。"""
+    pid = _mk_patient(client, auth_headers)
+    f, fn = _fake_jpg()
+    up = client.post("/api/images/upload", files={"file": (fn, f, "image/jpeg")}, data={"patient_id": str(pid)}, headers=auth_headers)
+    img_id = up.json()["id"]
+    resp = client.delete(f"/api/images/{img_id}", headers=second_doctor_headers)
+    assert resp.status_code == 403
 
 
 def test_detect_image(client, auth_headers):

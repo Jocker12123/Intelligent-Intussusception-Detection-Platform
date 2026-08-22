@@ -41,3 +41,27 @@ def test_delete_patient(client, auth_headers):
     assert resp.status_code == 204
     get_resp = client.get(f"/api/patients/{pid}", headers=auth_headers)
     assert get_resp.status_code == 404
+
+
+def test_doctor_cannot_edit_others_patient(client, auth_headers, second_doctor_headers):
+    """医生不能编辑别的医生录入的患者。"""
+    create = client.post("/api/patients", json={"name": "Owner", "gender": "Male", "age": 12}, headers=auth_headers)
+    pid = create.json()["id"]
+    resp = client.put(f"/api/patients/{pid}", json={"name": "Hacked"}, headers=second_doctor_headers)
+    assert resp.status_code == 403
+
+
+def test_doctor_cannot_delete_others_patient(client, auth_headers, second_doctor_headers):
+    """医生不能删除别的医生录入的患者。"""
+    create = client.post("/api/patients", json={"name": "Owner", "gender": "Male", "age": 12}, headers=auth_headers)
+    pid = create.json()["id"]
+    resp = client.delete(f"/api/patients/{pid}", headers=second_doctor_headers)
+    assert resp.status_code == 403
+
+
+def test_admin_can_delete_any_patient(client, auth_headers, admin_headers):
+    """管理员可以删除任意患者。"""
+    create = client.post("/api/patients", json={"name": "Owner", "gender": "Male", "age": 12}, headers=auth_headers)
+    pid = create.json()["id"]
+    resp = client.delete(f"/api/patients/{pid}", headers=admin_headers)
+    assert resp.status_code == 204

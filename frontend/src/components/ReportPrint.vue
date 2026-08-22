@@ -184,6 +184,7 @@ import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
 import { useSettingsStore } from '../stores/settings'
 import api from '../api/index'
+import { formatDateTime } from '../utils/time'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -238,12 +239,12 @@ const visible = computed({
 })
 
 const examItem = '小儿腹部'
+const todayIso = new Date().toISOString()
 const examDate = computed(() => {
-  if (props.result?.created_at) return formatDate(props.result.created_at)
-  return formatDate(new Date().toISOString())
+  return formatDateTime(props.result?.created_at || todayIso)
 })
 const reportDate = computed(() => {
-  return formatDate(new Date().toISOString())
+  return formatDateTime(todayIso)
 })
 
 const confidencePercent = computed(() => {
@@ -277,17 +278,6 @@ const resultDescription = computed(() => {
   if (cls === '肠套叠阴性') return '超声检查未见明确肠套叠征象，肠壁结构清晰，未见"同心圆征"及"套筒征"，CDFI显示肠壁血流信号正常。'
   return '图像质量欠佳，无法满足诊断要求，建议重新采集超声影像。'
 })
-
-function formatDate(iso) {
-  if (!iso) return '-'
-  const d = new Date(iso)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  const h = String(d.getHours()).padStart(2, '0')
-  const min = String(d.getMinutes()).padStart(2, '0')
-  return `${y}-${m}-${day} ${h}:${min}`
-}
 
 async function onPreviewOpened() {
   await settings.fetchSettings()

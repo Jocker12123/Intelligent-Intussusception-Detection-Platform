@@ -1,7 +1,14 @@
 <template>
   <div class="image-viewer">
+    <div v-if="isDicom" class="viewer-dicom">
+      <div class="dicom-icon-box">
+        <el-icon class="dicom-icon"><Document /></el-icon>
+      </div>
+      <p class="dicom-title">DICOM 影像</p>
+      <p class="dicom-text">该格式由算法侧解析用于诊断，浏览器暂不支持在线预览。</p>
+    </div>
     <img
-      v-if="!hasError && resolvedSrc"
+      v-else-if="!hasError && resolvedSrc"
       :src="resolvedSrc"
       :alt="alt"
       class="viewer-image"
@@ -19,18 +26,21 @@
 </template>
 
 <script setup>
-import { ref, watch, onUnmounted } from 'vue'
-import { PictureFilled, Loading } from '@element-plus/icons-vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
+import { PictureFilled, Loading, Document } from '@element-plus/icons-vue'
 import api from '../api/index'
 
 const props = defineProps({
   src: { type: String, required: true },
   alt: { type: String, default: '' },
+  mediaType: { type: String, default: '' },
 })
 
 const hasError = ref(false)
 const resolvedSrc = ref('')
 let objectUrl = null
+
+const isDicom = computed(() => props.mediaType === 'application/dicom')
 
 const loadImage = async (url) => {
   hasError.value = false
@@ -89,12 +99,45 @@ onUnmounted(() => {
   display: block;
 }
 
-.viewer-error, .viewer-loading {
+.viewer-error, .viewer-loading, .viewer-dicom {
   display: flex;
   flex-direction: column;
   align-items: center;
   color: var(--text-muted);
   padding: 60px 0;
+}
+
+.viewer-dicom {
+  gap: 4px;
+}
+.dicom-icon-box {
+  width: 80px;
+  height: 80px;
+  border-radius: var(--radius-md);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+.dicom-icon {
+  font-size: 36px;
+  color: var(--primary);
+}
+.dicom-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.dicom-text {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  max-width: 240px;
+  text-align: center;
+  line-height: 1.6;
 }
 
 .error-icon, .loading-icon {

@@ -28,13 +28,20 @@
           <div class="patient-bar-divider"></div>
           <div class="patient-bar-item">
             <div class="bar-label">检测时间</div>
-            <div class="bar-value">{{ result.created_at }}</div>
+            <div class="bar-value">{{ formatDateTime(result.created_at) }}</div>
           </div>
           <div class="patient-bar-divider"></div>
           <div class="patient-bar-item">
             <div class="bar-label">诊断分类</div>
             <div class="bar-value">
               <span class="mini-badge" :class="classificationClass">{{ result.classification }}</span>
+            </div>
+          </div>
+          <div class="patient-bar-divider"></div>
+          <div class="patient-bar-item">
+            <div class="bar-label">模型</div>
+            <div class="bar-value">
+              <span>{{ result.model_name || '—' }}<template v-if="result.model_version"> v{{ result.model_version }}</template><template v-if="result.inference_ms != null"> · {{ result.inference_ms }}ms</template></span>
             </div>
           </div>
         </div>
@@ -50,7 +57,7 @@
               <h3>超声影像</h3>
             </div>
             <div class="panel-body image-body">
-              <ImageViewer :src="imageUrl" alt="超声影像" />
+              <ImageViewer :src="imageUrl" alt="超声影像" :media-type="result.image?.media_type || ''" />
             </div>
           </div>
 
@@ -86,6 +93,7 @@ import ReportPrint from '../components/ReportPrint.vue'
 import { getResult } from '../api/results'
 import { getImageUrl } from '../api/images'
 import { getPatient } from '../api/patients'
+import { formatDateTime } from '../utils/time'
 
 const route = useRoute()
 const loading = ref(false)

@@ -1,30 +1,25 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import auth, patients, images, results, settings
-
-app = FastAPI(title="Intussusception Detection Platform")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.include_router(auth.router)
-app.include_router(patients.router)
-app.include_router(images.router)
-app.include_router(results.router)
-app.include_router(settings.router)
+from config import ALLOWED_ORIGINS
+from routers import auth, patients, images, results, settings, audit, detection_tasks
 
 
-@app.on_event("startup")
-def seed_data():
-    from database import SessionLocal, engine, Base
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 启动时建表并写入种子数据
+    from database import SessionLocal, engine, Base, ensure_columns
     from models import User, SystemSetting
     from auth import hash_password
     Base.metadata.create_all(bind=engine)
+    # 为旧库补齐新增的可空列（幂等，已存在则跳过）
+    ensure_columns("detection_results", {
+        "model_name": "VARCHAR(100)",
+        "model_version": "VARCHAR(50)",
+        "inference_ms": "FLOAT",
+        "class_probabilities": "TEXT",
+    })
     db = SessionLocal()
     try:
         if db.query(User).count() == 0:
@@ -43,3 +38,25 @@ def seed_data():
         db.commit()
     finally:
         db.close()
+    yield
+
+
+app = FastAPI(title="Intussusception Detection Platform", lifespan=lifespan)
+
+# 安全：仅允许白名单内的前端源跨域。
+# 注意：不能再用 ["*"] + allow_credentials=True，浏览器会拒绝携带凭证的通配符跨域。
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(auth.router)
+app.include_router(patients.router)
+app.include_router(images.router)
+app.include_router(results.router)
+app.include_router(settings.router)
+app.include_router(audit.router)
+app.include_router(detection_tasks.router)

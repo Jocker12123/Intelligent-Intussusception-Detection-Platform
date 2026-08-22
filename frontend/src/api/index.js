@@ -25,6 +25,9 @@ api.interceptors.response.use(
           window.location.href = '/#/login'
           ElMessage.error('登录已过期，请重新登录')
           break
+        case 403:
+          ElMessage.error(data.detail || '没有权限执行该操作')
+          break
         case 500:
           ElMessage.error('服务器错误')
           break

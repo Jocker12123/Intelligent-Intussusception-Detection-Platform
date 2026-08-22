@@ -246,6 +246,7 @@ import {
 } from '@element-plus/icons-vue'
 import AppLayout from '../components/AppLayout.vue'
 import { getPatients, getPatientStats, createPatient, updatePatient, deletePatient } from '../api/patients'
+import { formatDateTime } from '../utils/time'
 
 const router = useRouter()
 
@@ -344,17 +345,6 @@ function statusText(row) {
   if (s === 'negative') return '阴性'
   if (s === 'poor_quality') return '图像不佳'
   return '未检测'
-}
-
-function formatDateTime(iso) {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  const h = String(d.getHours()).padStart(2, '0')
-  const min = String(d.getMinutes()).padStart(2, '0')
-  return `${y}-${m}-${day} ${h}:${min}`
 }
 
 function resetDialogForm() {

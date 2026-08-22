@@ -65,3 +65,37 @@ def auth_headers(test_user):
     from auth import create_access_token
     token = create_access_token({"sub": str(test_user.id)})
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def second_doctor_headers(db_session):
+    """另一个医生用户的请求头，用于测试越权访问。"""
+    from auth import create_access_token
+    user = User(
+        username="doctor2",
+        password_hash=hash_password("password123"),
+        full_name="Second Doctor",
+        role="doctor",
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    token = create_access_token({"sub": str(user.id)})
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def admin_headers(db_session):
+    """管理员用户的请求头。"""
+    from auth import create_access_token
+    user = User(
+        username="admin1",
+        password_hash=hash_password("password123"),
+        full_name="Admin",
+        role="admin",
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    token = create_access_token({"sub": str(user.id)})
+    return {"Authorization": f"Bearer {token}"}

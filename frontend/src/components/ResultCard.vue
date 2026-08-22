@@ -26,6 +26,22 @@
       </div>
     </div>
 
+    <!-- 分类概率分布 -->
+    <div v-if="probList.length" class="result-section">
+      <div class="section-header">
+        <span class="section-label">分类概率</span>
+      </div>
+      <div class="prob-list">
+        <div v-for="p in probList" :key="p.label" class="prob-item">
+          <span class="prob-label">{{ p.label }}</span>
+          <div class="prob-track">
+            <div class="prob-fill" :style="{ width: p.percent + '%', background: p.color }"></div>
+          </div>
+          <span class="prob-value">{{ p.percent.toFixed(1) }}%</span>
+        </div>
+      </div>
+    </div>
+
     <!-- 诊断等级 -->
     <div v-if="result.severity" class="result-section">
       <div class="section-header">
@@ -93,6 +109,27 @@ const confidencePercent = computed(() => {
   if (val === null || val === undefined) return 0
   return Math.round(val * 100)
 })
+
+const LABEL_MAP = {
+  '肠套叠阳性': '阳性',
+  '肠套叠阴性': '阴性',
+  '图像质量不佳': '质量不佳',
+}
+const COLOR_MAP = {
+  '肠套叠阳性': 'var(--danger)',
+  '肠套叠阴性': 'var(--success)',
+  '图像质量不佳': 'var(--warning)',
+}
+const probList = computed(() => {
+  const probs = props.result.class_probabilities
+  if (!probs || typeof probs !== 'object') return []
+  return Object.entries(probs).map(([label, val]) => ({
+    label: LABEL_MAP[label] || label,
+    percent: (Number(val) || 0) * 100,
+    color: COLOR_MAP[label] || 'var(--primary)',
+  }))
+})
+
 
 const progressColor = computed(() => {
   const val = props.result.confidence
@@ -211,6 +248,47 @@ const rateColor = computed(() => {
 }
 .progress-track.large .progress-fill {
   border-radius: 5px;
+}
+
+/* 分类概率列表 */
+.prob-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.prob-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.prob-label {
+  width: 60px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  text-align: right;
+  flex-shrink: 0;
+}
+.prob-track {
+  flex: 1;
+  height: 6px;
+  background: var(--border-light);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.prob-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s ease;
+}
+.prob-value {
+  width: 48px;
+  font-size: 12px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--text-primary);
+  text-align: right;
+  flex-shrink: 0;
 }
 
 /* 等级 pill */
