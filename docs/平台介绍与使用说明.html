@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>儿童肠套叠超声影像 AI 辅助诊断平台 · 介绍与使用说明</title>
+  <style>
+    /* ============ 设计 Tokens ============ */
+    :root {
+      --blue: #2563eb;
+      --blue-deep: #1e3a5f;
+      --blue-soft: #eaf1fb;
+      --green: #059669;
+      --green-report: #006838;
+      --amber: #b8941f;
+      --sand: #f7f8fb;
+      --ink: #0f172a;
+      --ink-soft: #475569;
+      --line: #e2e8f0;
+      --white: #ffffff;
+      --radius: 14px;
+      --radius-sm: 10px;
+      --shadow: 0 1px 3px rgba(15,23,42,.06), 0 8px 24px rgba(15,23,42,.06);
+      --shadow-hover: 0 6px 18px rgba(37,99,235,.12), 0 16px 40px rgba(15,23,42,.08);
+      --font-title: 'Noto Serif SC','Songti SC','STSong','SimSun',serif;
+      --font-body: 'Noto Sans SC','PingFang SC','Microsoft YaHei',system-ui,sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font-body);
+      color: var(--ink);
+      background: var(--sand);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; text-decoration: none; }
+    .container { max-width: 1120px; margin: 0 auto; padding: 0 22px; }
+    .serif { font-family: var(--font-title); }
+
+    /* ============ Nav ============ */
+    nav {
+      position: sticky; top: 0; z-index: 50;
+      background: rgba(255,255,255,.88);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--line);
+    }
+    .nav-in {
+      display: flex; align-items: center; justify-content: space-between;
+      height: 64px;
+    }
+    .brand {
+      display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px;
+      color: var(--blue-deep); letter-spacing: .02em;
+    }
+    .brand .mark {
+      width: 30px; height: 30px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--blue), var(--blue-deep));
+      display: grid; place-items: center; color: #fff; font-size: 15px; font-weight: 800;
+    }
+    .nav-links { display: flex; gap: 26px; font-size: 14px; color: var(--ink-soft); }
+    .nav-links a:hover { color: var(--blue); }
+    @media (max-width: 720px) { .nav-links { display: none; } }
+
+    /* ============ Hero ============ */
+    .hero {
+      position: relative;
+      background:
+        radial-gradient(1200px 460px at 85% -10%, rgba(37,99,235,.12), transparent 60%),
+        radial-gradient(900px 420px at 0% 0%, rgba(6,104,56,.08), transparent 55%),
+        var(--sand);
+      overflow: hidden;
+    }
+    .hero-in {
+      padding: 84px 0 64px;
+      display: grid; grid-template-columns: 1.15fr .85fr; gap: 48px; align-items: center;
+    }
+    @media (max-width: 860px) { .hero-in { grid-template-columns: 1fr; padding: 60px 0 50px; } }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 13px; font-weight: 600; color: var(--green-report);
+      background: rgba(6,104,56,.08); border: 1px solid rgba(6,104,56,.16);
+      padding: 7px 14px; border-radius: 999px; margin-bottom: 22px;
+    }
+    .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green-report); }
+    .hero h1 {
+      font-family: var(--font-title); font-size: clamp(30px, 4.4vw, 50px);
+      line-height: 1.18; color: var(--ink); font-weight: 700; letter-spacing: .01em;
+    }
+    .hero h1 .accent { color: var(--blue); }
+    .hero p.lead {
+      margin-top: 22px; font-size: clamp(16px, 1.6vw, 18px); color: var(--ink-soft);
+      max-width: 540px; text-wrap: pretty;
+    }
+    .hero .meta {
+      margin-top: 28px; display: flex; gap: 26px; flex-wrap: wrap;
+    }
+    .hero .meta .m {
+      font-size: 14px; color: var(--ink-soft); display: flex; align-items: center; gap: 8px;
+    }
+    .hero .meta .m b { color: var(--ink); font-weight: 700; }
+
+    /* 右侧品牌卡 */
+    .brand-card {
+      background: var(--white); border: 1px solid var(--line); border-radius: 20px;
+      box-shadow: var(--shadow); padding: 30px;
+      position: relative; overflow: hidden;
+    }
+    .brand-card::before {
+      content: ''; position: absolute; inset: 0 0 auto 0; height: 4px;
+      background: linear-gradient(90deg, var(--blue), var(--green-report));
+    }
+    .brand-card .top { display: flex; align-items: center; gap: 14px; }
+    .brand-card .logo {
+      width: 54px; height: 54px; border-radius: 50%; flex: 0 0 auto;
+      background: linear-gradient(135deg, var(--blue), var(--blue-deep));
+      display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 24px;
+    }
+    .brand-card .bt { font-size: 15px; font-weight: 700; color: var(--blue-deep); }
+    .brand-card .bs { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
+    .brand-card .hospital {
+      margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line);
+      font-size: 13px; color: var(--ink-soft); line-height: 1.8;
+    }
+    .brand-card .hospital b { color: var(--ink); }
+
+    /* ============ 区块标题 ============ */
+    section { padding: 68px 0; }
+    .sec-head { text-align: center; max-width: 640px; margin: 0 auto 42px; }
+    .sec-head .k {
+      font-size: 13px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+      color: var(--blue); margin-bottom: 12px;
+    }
+    .sec-head h2 { font-family: var(--font-title); font-size: clamp(24px, 3vw, 34px); color: var(--ink); }
+    .sec-head p { margin-top: 14px; color: var(--ink-soft); font-size: 15px; }
+
+    /* ============ 亮点卡片 ============ */
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    @media (max-width: 980px) { .grid-4 { grid-template-columns: repeat(2,1fr); } .grid-3 { grid-template-columns: repeat(2,1fr); } }
+    @media (max-width: 560px) { .grid-4, .grid-3 { grid-template-columns: 1fr; } }
+
+    .card {
+      background: var(--white); border: 1px solid var(--line); border-radius: var(--radius);
+      box-shadow: var(--shadow); padding: 26px;
+      transition: transform .25s ease, box-shadow .25s ease;
+    }
+    .card:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); }
+    .card .ic {
+      width: 46px; height: 46px; border-radius: 12px;
+      background: var(--blue-soft); color: var(--blue);
+      display: grid; place-items: center; margin-bottom: 16px; font-size: 20px;
+    }
+    .card.alt .ic { background: rgba(6,104,56,.1); color: var(--green-report); }
+    .card h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+    .card p { font-size: 14px; color: var(--ink-soft); text-wrap: pretty; }
+
+    /* ============ 使用流程 ============ */
+    .flow { background: linear-gradient(180deg, var(--blue-deep), #16304a); color: #fff; }
+    .flow .sec-head .k { color: #9fc0ef; }
+    .flow .sec-head h2 { color: #fff; }
+    .flow .sec-head p { color: rgba(255,255,255,.75); }
+    .steps { display: grid; grid-template-columns: repeat(6,1fr); gap: 12px; }
+    @media (max-width: 900px) { .steps { grid-template-columns: repeat(3,1fr); } }
+    @media (max-width: 560px) { .steps { grid-template-columns: repeat(2,1fr); } }
+    .step {
+      background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14);
+      border-radius: var(--radius); padding: 20px 16px;
+      transition: background .25s ease;
+    }
+    .step:hover { background: rgba(255,255,255,.1); }
+    .step .num { font-size: 13px; font-weight: 800; color: #9fc0ef; letter-spacing: .06em; }
+    .step h4 { font-size: 15px; margin: 8px 0 6px; }
+    .step p { font-size: 13px; color: rgba(255,255,255,.72); line-height: 1.5; }
+    .step .arrow { display: block; margin-top: 10px; font-size: 13px; color: #9fc0ef; }
+
+    /* ============ 功能模块详情 ============ */
+    .mod {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center;
+      padding: 48px 0; border-top: 1px solid var(--line);
+    }
+    .mod:first-of-type { border-top: none; }
+    .mod.reverse { direction: rtl; }
+    .mod.reverse > * { direction: ltr; }
+    @media (max-width: 860px) { .mod { grid-template-columns: 1fr; gap: 24px; } }
+
+    .mod-text .ic {
+      width: 44px; height: 44px; border-radius: 12px; background: var(--blue-soft);
+      color: var(--blue); display: grid; place-items: center; font-size: 20px; margin-bottom: 16px;
+    }
+    .mod-text h3 { font-size: 22px; font-weight: 700; margin-bottom: 10px; font-family: var(--font-title); }
+    .mod-text p { color: var(--ink-soft); font-size: 15px; margin-bottom: 12px; }
+    .mod-text ul { list-style: none; display: flex; flex-direction: column; gap: 9px; }
+    .mod-text li { display: flex; gap: 10px; font-size: 14px; color: var(--ink); }
+    .mod-text li .tick { color: var(--green-report); font-weight: 800; flex: 0 0 auto; }
+
+    /* 截图占位符 / 真实截图 */
+    .shot {
+      width: 100%; aspect-ratio: 16 / 10; border-radius: var(--radius);
+      background: #f0f4f9; overflow: hidden; display: grid; place-items: center;
+      text-align: center; color: #8195a8; font-size: 14px; padding: 20px;
+    }
+    .shot.has-img { border: 1px solid var(--line); padding: 0; display: block; }
+    .shot.has-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .shot b { color: #5d7288; font-size: 15px; display: block; margin-bottom: 4px; }
+    .shot small { font-size: 12px; }
+
+    /* ============ 技术亮点 ============ */
+    .tech { background: var(--white); }
+    .tech .grid-4 .card { border: 1px solid var(--line); }
+    .pill {
+      display: inline-flex; align-items: center; font-size: 12px; font-weight: 600;
+      padding: 4px 12px; border-radius: 999px;
+    }
+    .pill.g { background: rgba(6,104,56,.1); color: var(--green-report); }
+    .pill.b { background: var(--blue-soft); color: var(--blue); }
+    .tech .card .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+
+    /* ============ 待补充截图提醒 ============ */
+    .todo {
+      background: #fff8e6; border: 1px solid #f2dfa6; border-radius: var(--radius);
+      padding: 20px 24px; display: flex; gap: 14px; align-items: flex-start;
+    }
+    .todo .tic { font-size: 20px; }
+    .todo h4 { font-size: 15px; color: #8a6d2f; margin-bottom: 4px; }
+    .todo p { font-size: 13px; color: #7c6a45; }
+
+    footer { padding: 40px 0; text-align: center; color: var(--ink-soft); font-size: 13px; border-top: 1px solid var(--line); background: var(--white); }
+    footer .f-brand { font-weight: 700; color: var(--blue-deep); margin-bottom: 6px; }
+
+    /* 滚动进入动画 */
+    .reveal { opacity: 0; transform: translateY(22px); transition: opacity .6s ease, transform .6s ease; }
+    .reveal.on { opacity: 1; transform: none; }
+  </style>
+</head>
+<body>
+
+  <!-- Nav -->
+  <nav>
+    <div class="container nav-in">
+      <div class="brand"><span class="mark">＋</span><span>肠套叠 AI 辅助诊断平台</span></div>
+      <div class="nav-links">
+        <a href="#overview">平台概览</a>
+        <a href="#flow">使用流程</a>
+        <a href="#features">功能模块</a>
+        <a href="#tech">技术亮点</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <header class="hero">
+    <div class="container hero-in">
+      <div>
+        <span class="eyebrow"><span class="dot"></span>大学科研训练项目 · 面向特定医院</span>
+        <h1>儿童肠套叠超声影像<br /><span class="accent">AI 辅助诊断平台</span></h1>
+        <p class="lead">面向医院的诊疗场景，提供患者管理、超声影像上传、AI 辅助检测、结果展示与报告打印的一站式平台，帮助医生快速判断儿童肠套叠。</p>
+        <div class="meta">
+          <div class="m"><b>前后端分离</b>架构</div>
+          <div class="m"><b>AI 辅助检测</b>核心</div>
+          <div class="m"><b>一键</b>打印报告</div>
+        </div>
+      </div>
+      <div class="brand-card">
+        <div class="top">
+          <div class="logo">＋</div>
+          <div>
+            <div class="bt">皖南医学院</div>
+            <div class="bs">第一附属医院（弋矶山医院）</div>
+          </div>
+        </div>
+        <div class="hospital">
+          <b>平台定位：</b>为儿科、急诊科医生提供超声影像的 AI 辅助诊断支持。<br />
+          <b>核心能力：</b>上传影像 → AI 检测 → 查看结果 → 打印报告。
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- 平台概览：核心亮点 -->
+  <section id="overview">
+    <div class="container">
+      <div class="sec-head reveal">
+        <div class="k">Overview</div>
+        <h2>平台核心能力</h2>
+        <p>把一个复杂的 AI 诊疗流程，拆成医生熟悉的、清晰可控的几步操作。</p>
+      </div>
+      <div class="grid-4">
+        <div class="card reveal">
+          <div class="ic">◉</div>
+          <h3>AI 辅助诊断</h3>
+          <p>对超声影像自动给出「阳性 / 阴性 / 质量不佳」分类与置信度，并支持多分类概率展示。</p>
+        </div>
+        <div class="card alt reveal">
+          <div class="ic">▤</div>
+          <h3>患者全周期管理</h3>
+          <p>患者信息录入、搜索、编辑，支持病历号、住院号、检查部位、出生日期等字段。</p>
+        </div>
+        <div class="card reveal">
+          <div class="ic">⇧</div>
+          <h3>影像批量上传</h3>
+          <p>支持拖拽/选择多张 JPG / PNG / BMP / DICOM，上传后逐张自动检测，带进度。</p>
+        </div>
+        <div class="card alt reveal">
+          <div class="ic">🖨</div>
+          <h3>一键打印报告</h3>
+          <p>自动生成带医院抬头的彩色多普勒超声检查报告，可导出 PDF。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 使用流程 -->
+  <section id="flow" class="flow">
+    <div class="container">
+      <div class="sec-head reveal">
+        <div class="k">How It Works</div>
+        <h2>六步完成一次 AI 辅助诊断</h2>
+        <p>从登录到打印报告，只需几分钟。</p>
+      </div>
+      <div class="steps">
+        <div class="step reveal"><div class="num">01</div><h4>登录系统</h4><p>医生 / 管理员账号登录，JWT 安全认证。</p><span class="arrow">→</span></div>
+        <div class="step reveal"><div class="num">02</div><h4>新建患者</h4><p>录入患儿基本信息与临床症状。</p><span class="arrow">→</span></div>
+        <div class="step reveal"><div class="num">03</div><h4>上传影像</h4><p>上传腹部超声影像，可一次多张。</p><span class="arrow">→</span></div>
+        <div class="step reveal"><div class="num">04</div><h4>AI 检测</h4><p>系统调用 AI 模型，自动检测并给出结果。</p><span class="arrow">→</span></div>
+        <div class="step reveal"><div class="num">05</div><h4>查看结果</h4><p>查看分类、置信度、严重度与治疗建议。</p><span class="arrow">→</span></div>
+        <div class="step reveal"><div class="num">06</div><h4>打印报告</h4><p>一键生成并导出 PDF 检查报告。</p><span class="arrow">→</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 功能模块详情 -->
+  <section id="features">
+    <div class="container">
+      <div class="sec-head reveal">
+        <div class="k">Features</div>
+        <h2>功能模块详解</h2>
+        <p>每个模块都对应平台里的一块真实功能。</p>
+      </div>
+
+      <!-- 登录 -->
+      <div class="mod reveal">
+        <div class="mod-text">
+          <div class="ic">🔐</div>
+          <h3>安全登录</h3>
+          <p>医生与管理员分角色登录，权限分级（医生仅管理本人数据，管理员全权），并记录登录审计。</p>
+          <ul>
+            <li><span class="tick">✓</span>JWT 安全认证</li>
+            <li><span class="tick">✓</span>角色权限分级</li>
+            <li><span class="tick">✓</span>登录行为审计</li>
+          </ul>
+        </div>
+        <div class="shot has-img reveal"><img src="screenshots/login.jpg" alt="登录页截图" /></div>
+      </div>
+
+      <!-- 患者管理 -->
+      <div class="mod reverse reveal">
+        <div class="mod-text">
+          <div class="ic">▤</div>
+          <h3>患者管理</h3>
+          <p>患者列表带搜索、分页、状态标签与统计卡片；支持新增 / 编辑 / 删除患者。</p>
+          <ul>
+            <li><span class="tick">✓</span>按姓名 / 病历号搜索</li>
+            <li><span class="tick">✓</span>患者信息补全（住院号、检查部位、出生日期等）</li>
+            <li><span class="tick">✓</span>检测次数 / 最近状态汇总</li>
+          </ul>
+        </div>
+        <div class="shot has-img reveal"><img src="screenshots/patient-list.jpg" alt="患者列表页截图" /></div>
+      </div>
+
+      <!-- 影像上传 -->
+      <div class="mod reveal">
+        <div class="mod-text">
+          <div class="ic">⇧</div>
+          <h3>影像上传</h3>
+          <p>支持拖拽 / 点击选择，一次可上传多张 JPG / PNG / BMP / DICOM，上传后逐张自动检测并显示进度。</p>
+          <ul>
+            <li><span class="tick">✓</span>多选批量上传</li>
+            <li><span class="tick">✓</span>格式与大小校验</li>
+            <li><span class="tick">✓</span>DICOM 明确提示（算法侧解析）</li>
+          </ul>
+        </div>
+        <div class="shot has-img reveal"><img src="screenshots/upload.jpg" alt="影像上传页截图" /></div>
+      </div>
+
+      <!-- 检测结果 -->
+      <div class="mod reverse reveal">
+        <div class="mod-text">
+          <div class="ic">◉</div>
+          <h3>AI 检测结果</h3>
+          <p>清晰展示诊断分类、置信度、严重度、治疗成功率、治疗建议，以及各分类的概率条与模型信息。</p>
+          <ul>
+            <li><span class="tick">✓</span>彩色分类标签</li>
+            <li><span class="tick">✓</span>置信度 / 概率可视化</li>
+            <li><span class="tick">✓</span>模型名 / 版本 / 耗时</li>
+          </ul>
+        </div>
+        <div class="shot has-img reveal"><img src="screenshots/result.jpg" alt="AI检测结果页截图" /></div>
+      </div>
+
+      <!-- 检测历史 -->
+      <div class="mod reveal">
+        <div class="mod-text">
+          <div class="ic">↻</div>
+          <h3>检测历史与对比</h3>
+          <p>同一患者的历次检测以时间线展示，支持前后对比、按分类 / 患者筛选，并可导出 CSV。</p>
+          <ul>
+            <li><span class="tick">✓</span>时间趋势 / 前后对比</li>
+            <li><span class="tick">✓</span>分类 + 患者筛选</li>
+            <li><span class="tick">✓</span>结果列表导出 CSV</li>
+          </ul>
+        </div>
+        <div class="shot has-img reveal"><img src="screenshots/history-timeline.jpg" alt="检测历史与时间线截图" /></div>
+      </div>
+
+      <!-- 报告 -->
+      <div class="mod reverse reveal">
+        <div class="mod-text">
+          <div class="ic">🖨</div>
+          <h3>报告打印</h3>
+          <p>生成带医院抬头的彩色多普勒超声检查报告，含患者信息、检查所见、AI 诊断结果与治疗建议。</p>
+          <ul>
+            <li><span class="tick">✓</span>医院抬头 + 患者信息</li>
+            <li><span class="tick">✓</span>AI 诊断结果</li>
+            <li><span class="tick">✓</span>导出 PDF</li>
+          </ul>
+        </div>
+        <div class="shot has-img reveal"><img src="screenshots/report.jpg" alt="打印报告预览截图" /></div>
+      </div>
+
+      <!-- 审计日志 -->
+      <div class="mod reveal">
+        <div class="mod-text">
+          <div class="ic">◷</div>
+          <h3>审计日志（管理员）</h3>
+          <p>记录每位医护人员的操作（登录、增删改、检测、设置），含时间、操作人、来源 IP，可按日期筛选、导出 CSV。</p>
+          <ul>
+            <li><span class="tick">✓</span>操作全程留痕</li>
+            <li><span class="tick">✓</span>仅管理员可见</li>
+            <li><span class="tick">✓</span>日期范围筛选 + 导出</li>
+          </ul>
+        </div>
+        <div class="shot has-img reveal"><img src="screenshots/audit.jpg" alt="审计日志页截图" /></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 技术亮点 -->
+  <section id="tech" class="tech">
+    <div class="container">
+      <div class="sec-head reveal">
+        <div class="k">Technology</div>
+        <h2>技术亮点与工程保障</h2>
+        <p>不只是界面，底层的稳定性、安全与可维护性同样被认真对待。</p>
+      </div>
+      <div class="grid-4">
+        <div class="card reveal">
+          <div class="ic">⚙</div>
+          <h3>前后端分离架构</h3>
+          <p>Vue 3 + Element Plus 前端 / FastAPI 后端，REST 接口，便于维护与分工。</p>
+          <div class="tags"><span class="pill b">Vue 3</span><span class="pill b">FastAPI</span></div>
+        </div>
+        <div class="card alt reveal">
+          <div class="ic">🛡</div>
+          <h3>安全与权限</h3>
+          <p>JWT 认证、角色权限分级、CORS 白名单、上传字节校验，保障数据安全。</p>
+          <div class="tags"><span class="pill g">JWT</span><span class="pill g">RBAC</span></div>
+        </div>
+        <div class="card reveal">
+          <div class="ic">↻</div>
+          <h3>异步检测 + 进度</h3>
+          <p>AI 检测在后台线程执行、前端轮询进度，推理慢也不阻塞界面。</p>
+          <div class="tags"><span class="pill b">异步</span><span class="pill b">轮询</span></div>
+        </div>
+        <div class="card alt reveal">
+          <div class="ic">◷</div>
+          <h3>审计与可追溯</h3>
+          <p>全程操作审计、模型元数据记录，便于科研数据追溯与合规。</p>
+          <div class="tags"><span class="pill g">审计</span><span class="pill g">留痕</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <footer>
+    <div class="container">
+      <div class="f-brand">皖南医学院第一附属医院（弋矶山医院）· 肠套叠 AI 辅助诊断平台</div>
+      <div>儿童肠套叠超声影像 AI 辅助诊断平台 · 大学科研训练项目</div>
+    </div>
+  </footer>
+
+  <script>
+    // 滚动淡入
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('on'); });
+    }, { threshold: 0.12 });
+    document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+  </script>
+</body>
+</html>

@@ -4,7 +4,9 @@ import json
 
 from sqlalchemy.orm import Session
 from models import DetectionResult as DetectionResultModel, Image
-from algorithm.interface import detect_intussusception, DetectionResult, validate_result
+# 走适配层：两个算法模块就绪时自动用真实流水线，否则自动回退 Mock
+from algorithm.pipeline import detect_intussusception
+from algorithm.interface import DetectionResult, validate_result
 
 
 class DetectionService:

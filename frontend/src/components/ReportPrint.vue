@@ -7,10 +7,11 @@
     @opened="onPreviewOpened"
   >
     <div class="print-actions">
-      <el-button type="primary" @click="handlePrint" :loading="printing">
+      <el-button type="primary" @click="handlePrint" :loading="printing" :disabled="!result">
         <el-icon><Printer /></el-icon>导出PDF
       </el-button>
       <el-button @click="visible = false">关闭</el-button>
+      <span v-if="!result" class="no-result-tip">未加载到检测结果，无法导出报告</span>
     </div>
 
     <div ref="reportRef" class="report-container" v-loading="printing">
@@ -314,6 +315,11 @@ function waitForImages(container) {
 
 async function handlePrint() {
   if (!reportRef.value) return
+  // 防护：没有检测结果时不生成空报告
+  if (!props.result) {
+    ElMessage.warning('未加载到检测结果，无法导出报告')
+    return
+  }
   printing.value = true
   try {
     await nextTick()
@@ -360,7 +366,17 @@ async function handlePrint() {
 .print-actions {
   display: flex;
   gap: 12px;
+  align-items: center;
   margin-bottom: 16px;
+}
+
+.no-result-tip {
+  font-size: 13px;
+  color: #b45309;
+  background: #fff7e6;
+  border: 1px solid #f2dfa6;
+  border-radius: 6px;
+  padding: 4px 10px;
 }
 
 .report-container {

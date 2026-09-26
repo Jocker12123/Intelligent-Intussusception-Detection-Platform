@@ -7,7 +7,7 @@
         <p class="page-desc">查看患者信息、超声影像及检测结果</p>
       </div>
       <div class="page-header-actions">
-        <el-button type="primary" @click="printVisible = true" v-if="patient">
+        <el-button type="primary" @click="printLatestReport" v-if="patient">
           <el-icon><Printer /></el-icon>
           打印报告
         </el-button>
@@ -232,6 +232,9 @@
                     </div>
                     <div class="timeline-actions">
                       <el-button text size="small" @click="$router.push(`/results/${d.id}`)">查看详情</el-button>
+                      <el-button text size="small" @click="openReportFor(d)">
+                        <el-icon><Printer /></el-icon>打印
+                      </el-button>
                     </div>
                   </div>
                 </div>
@@ -416,15 +419,44 @@ async function handleRedetect(row) {
   }
 }
 
-async function printForImage(row) {
+// 统一打开报告：按「结果 ID + 影像 ID」加载后打开打印预览
+async function openReport(resultId, imageId) {
+  if (!resultId) {
+    ElMessage.warning('该记录暂无检测结果，无法打印报告')
+    return
+  }
   try {
-    const res = await getResult(row.result_id)
+    const res = await getResult(resultId)
     printResult.value = res.data
-    printImageUrl.value = getImageUrl(row.id)
+    // 优先用传入的影像 ID，其次用结果里的 image_id（历史记录只有后者）
+    const imgId = imageId || res.data?.image_id
+    printImageUrl.value = imgId ? getImageUrl(imgId) : ''
     printVisible.value = true
   } catch {
     ElMessage.error('获取检测结果失败')
   }
+}
+
+// 影像列表行内打印
+function printForImage(row) {
+  return openReport(row.result_id, row.id)
+}
+
+// 检测历史时间线某条打印
+function openReportFor(detection) {
+  return openReport(detection.id, detection.image_id)
+}
+
+// 顶部「打印报告」：默认打印该患者【最近一次】检测结果
+function printLatestReport() {
+  if (detections.value.length) {
+    const latest = detections.value[0]
+    return openReport(latest.id, latest.image_id)
+  }
+  // 兜底：检测历史未取到时，从影像列表里找一条已检测的
+  const withResult = images.value.find((i) => i.has_result && i.result_id)
+  if (withResult) return openReport(withResult.result_id, withResult.id)
+  ElMessage.warning('该患者暂无检测结果，请先上传影像并完成检测')
 }
 
 onMounted(fetchPatient)
