@@ -77,6 +77,68 @@ def load_done() -> set:
     return done
 
 
+# --------------------------------------------------------------------------------------
+# 「样本内」护栏：影子数据必须是**模型训练时没见过、且未用于评测**的影像，否则标定无意义
+# --------------------------------------------------------------------------------------
+# 两类都要排除：
+#   ① 训练语料 —— 模型见过，候选策略分数被系统性压低，据此定阈值会偏低；
+#   ② 留出测试集 —— 模型没见过，但它是评测基准，拿它标定等于测试集调参。
+# 可用 --corpus-dirs / --heldout-dirs 覆盖。
+# 注意 normal/ 也列入排除：599 张里有 450 张被用作训练负样本（约 75% 受污染），
+# 而"按内容 md5 排除"无法区分哪些是训练用的，故整目录保守排除 —— 宁可少采，不可采脏。
+DEFAULT_CORPUS_DIRS = ("成功横断面", "失败横断面", "成功纵切面", "失败纵切面", "normal")
+DEFAULT_HELDOUT_DIRS = ("test190_new",)
+
+
+def corpus_md5_index(corpus_dirs=None, heldout_dirs=None) -> tuple:
+    """返回 (训练语料 md5 集合, 留出测试集 md5 集合)，结果缓存到 shadow_data/corpus_md5.pkl。
+
+    注意：语料里存在“同一张图出现多次”的情况，按**内容** md5 比对，
+    不依赖文件名，避免改名后漏判。
+    """
+    import hashlib
+    import numpy as np
+    cache = shadow.SHADOW_DIR / "corpus_md5.pkl"
+    if cache.exists():
+        try:
+            tr, ho = pickle.load(open(cache, "rb"))
+            return set(tr), set(ho)
+        except Exception:
+            pass
+    from algorithm.pipeline import load_image
+
+    def _scan(names):
+        out = set()
+        for d in names:
+            p = Path(d)
+            if p.is_absolute():
+                cands = [p]
+            else:
+                # 语料不一定放在平台目录里：依次在平台根、平台的上一级（常见工作区布局）里找
+                cands = [BACKEND.parent / d, BACKEND.parent.parent / d]
+            root = next((c for c in cands if c.exists() and c.is_dir()), None)
+            if root is None:
+                continue
+            for f in root.rglob("*"):
+                if not f.is_file() or f.suffix.lower() not in IMG_EXTS:
+                    continue
+                try:
+                    b = model_core.to_bgr(load_image(f))
+                    if b is not None:
+                        out.add(hashlib.md5(np.ascontiguousarray(b).tobytes()).hexdigest())
+                except Exception:
+                    continue
+        return out
+
+    train = _scan(corpus_dirs or DEFAULT_CORPUS_DIRS)
+    held = _scan(heldout_dirs if heldout_dirs is not None else DEFAULT_HELDOUT_DIRS)
+    try:
+        pickle.dump((train, held), open(cache, "wb"))
+    except Exception:
+        pass
+    return train, held
+
+
 def load_image_bgr(path: Path):
     from algorithm.pipeline import load_image
     try:
@@ -92,6 +154,12 @@ def main() -> int:
     ap.add_argument("--policy", default=shadow.SHADOW_POLICY)
     ap.add_argument("--assume-label", choices=["0", "1"], default=None,
                     help="若整批图的真值已知（如全是阴性），直接写入 labels.csv")
+    ap.add_argument("--corpus-dirs", nargs="*", default=None,
+                    help="训练语料目录（用于排除样本内影像）；默认 4 个标注目录")
+    ap.add_argument("--heldout-dirs", nargs="*", default=None,
+                    help="留出测试集目录（也不能用于标定，否则等于测试集调参）；默认 test190_new")
+    ap.add_argument("--keep-in-sample", action="store_true",
+                    help="不做样本内排除（不推荐：样本内数据标定出的阈值会偏低）")
     ap.add_argument("--status", action="store_true")
     a = ap.parse_args()
 
@@ -140,7 +208,19 @@ def main() -> int:
     from algorithm import classification  # noqa: F401  触发日志
     model_core._resolve(a.policy, enforce_deploy_guard=False)
 
-    n_ok = n_skip = n_fail = 0
+    # ★ 样本内护栏：训练语料里出现过的影像不能用于标定（模型见过它们，分数被压低，
+    #   据此定出的阈值会偏低）。命中即跳过，并在日志里明确说明。
+    if a.keep_in_sample:
+        corpus, heldout = set(), set()
+    else:
+        corpus, heldout = corpus_md5_index(a.corpus_dirs, a.heldout_dirs)
+    if corpus or heldout:
+        print(f"排除清单：训练语料 {len(corpus)} 张、留出测试集 {len(heldout)} 张（命中者跳过，不计入标定）")
+    else:
+        print("[提醒] 未找到训练语料/测试集目录，跳过排除 —— 若这些影像是模型见过或用于评测的，"
+              "标定结果会失真，请确认数据来自部署后的新影像")
+
+    n_ok = n_skip = n_fail = n_in = n_ho = 0
     labels = {}
     for i, f in enumerate(todo, 1):
         bgr = load_image_bgr(f)
@@ -151,6 +231,12 @@ def main() -> int:
         if key in done:
             n_skip += 1
             continue
+        if key in corpus:
+            n_in += 1
+            continue                      # 训练语料里见过 → 不采集
+        if key in heldout:
+            n_ho += 1
+            continue                      # 留出测试集 → 不能用于标定（会变成测试集调参）
         try:
             deployed = model_core.score_with(model_core.POLICY, bgr, enforce_deploy_guard=True)
             cand = model_core.score_with(a.policy, bgr, enforce_deploy_guard=False)
@@ -173,6 +259,7 @@ def main() -> int:
                "shadow_policy": a.policy, "shadow_version": cand["version"],
                "shadow_score": round(float(cand["score"]), 8),
                "shadow_threshold_placeholder": round(float(cand["threshold"]), 8),
+               "in_sample": False,          # 已通过样本内护栏
                "image": f"images/{key}.jpg" if shadow.SHADOW_SAVE_IMAGES else None,
                "source": str(f)}
         with open(shadow.SHADOW_DIR / "shadow.jsonl", "a", encoding="utf-8") as fh:
@@ -183,7 +270,8 @@ def main() -> int:
         n_ok += 1
         if i % 25 == 0 or i == len(todo):
             el = time.time() - t0
-            print(f"  {i}/{len(todo)}  成功{n_ok} 跳过{n_skip} 失败{n_fail}  "
+            print(f"  {i}/{len(todo)}  成功{n_ok} 跳过{n_skip} 样本内剔除{n_in} "
+                  f"测试集剔除{n_ho} 失败{n_fail}  "
                   f"{(el/i):.2f}s/张  ETA {(len(todo)-i)*el/i/60:.1f} min")
 
     if labels:
@@ -200,7 +288,12 @@ def main() -> int:
                 w.writerow([k, v])
         print(f"已写入 {len(labels)} 条已知标签 -> {lab_path}")
 
-    print(f"\n完成：新增 {n_ok}，跳过(已存在) {n_skip}，失败 {n_fail}，用时 {(time.time()-t0)/60:.1f} min")
+    print(f"\n完成：新增 {n_ok}，跳过(已存在) {n_skip}，样本内剔除 {n_in}，测试集剔除 {n_ho}，"
+          f"失败 {n_fail}，用时 {(time.time()-t0)/60:.1f} min")
+    if n_in:
+        print(f"  ※ {n_in} 张命中训练语料、已跳过：模型见过它们，据此标定会偏低")
+    if n_ho:
+        print(f"  ※ {n_ho} 张命中留出测试集、已跳过：拿评测集标定等于测试集调参")
     print(f"累计去重 {len(done)} 张。下一步：python -m algorithm.calibrate_shadow --export")
     return 0
 
