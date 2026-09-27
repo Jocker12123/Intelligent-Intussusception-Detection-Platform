@@ -74,7 +74,7 @@ _start_warmup()
 # 适配层会读取这两个常量，前端检测结果页会单独显示「检测模型」标签。
 # 本项目是**联合的 OBB 检测+分类模型**，这里填检测侧（负责定位病灶框与证据分）的名称。
 NAME = "intussusception-obb-detector"
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 
 
 def detect(image: Any) -> Optional[ROI]:
