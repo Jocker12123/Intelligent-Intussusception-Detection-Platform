@@ -68,7 +68,17 @@ def load_image(image_path: Path):
         from PIL import Image  # noqa: WPS433
     except ImportError as exc:  # pragma: no cover
         raise RuntimeError("读取图片需要安装 Pillow 与 numpy：pip install pillow numpy") from exc
-    return np.array(Image.open(image_path).convert("RGB"))
+    with Image.open(image_path) as im:
+        # >8 位图像（如 16 位灰度 PNG，常见于 DICOM 阅片器导出）不能直接 convert("RGB")：
+        # Pillow 会把 >255 的值**截断**到 255，整幅图会变成大片纯白、信息几乎全失。
+        # 先按 min-max 归一化到 8 位再转 RGB（对 8 位图像是恒等变换，行为不变）。
+        if im.mode in ("I", "I;16", "I;16B", "I;16L", "I;16N", "F"):
+            a = np.asarray(im).astype(np.float32)
+            lo, hi = float(np.nanmin(a)), float(np.nanmax(a))
+            arr8 = (((a - lo) / (hi - lo) * 255).astype(np.uint8)
+                    if hi > lo else np.zeros(a.shape, np.uint8))
+            im = Image.fromarray(arr8)
+        return np.array(im.convert("RGB"))
 
 
 def detect_intussusception(image_path: Path) -> DetectionResult:
