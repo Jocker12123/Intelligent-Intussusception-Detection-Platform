@@ -127,8 +127,38 @@ class DetectionResultOut(BaseModel):
     model_version: Optional[str] = None
     inference_ms: Optional[float] = None
     class_probabilities: Optional[dict] = None
+    # ---- 双模型溯源：检测(A) / 分类(B) 各自的模型信息（旧数据为 None）----
+    detection_model_name: Optional[str] = None
+    detection_model_version: Optional[str] = None
+    classification_model_name: Optional[str] = None
+    classification_model_version: Optional[str] = None
+    detection_ms: Optional[float] = None
+    classification_ms: Optional[float] = None
+    detection_score: Optional[float] = None
+    roi_box: Optional[List[int]] = None
+    # 算法是否回传了带病灶框的标注图（前端据此显示「AI 标注图」切换）
+    has_result_image: bool = False
     created_at: datetime
     image: Optional[ImageInfo] = None
+
+    @field_validator("roi_box", mode="before")
+    @classmethod
+    def _parse_roi_box(cls, v):
+        # 数据库存的是 JSON 字符串，这里在类型校验前解析成 [x1,y1,x2,y2]
+        if v is None:
+            return None
+        if isinstance(v, str):
+            import json
+            try:
+                v = json.loads(v)
+            except (ValueError, TypeError):
+                return None
+        if not isinstance(v, (list, tuple)) or len(v) != 4:
+            return None
+        try:
+            return [int(x) for x in v]
+        except (TypeError, ValueError):
+            return None
 
     @field_validator("class_probabilities", mode="before")
     @classmethod
@@ -150,11 +180,16 @@ class DetectionResultOut(BaseModel):
 
     model_config = {"from_attributes": True}
 
-    @field_serializer("created_at")
-    def _ser_created_at(self, v: datetime) -> str:
-        return _as_utc(v)
 
-    model_config = {"from_attributes": True}
+def detection_result_out(result) -> DetectionResultOut:
+    """把检测结果 ORM 行转成响应模型。
+
+    `has_result_image` 不在数据表里（表里存的是服务器本地路径 `result_image_path`），
+    这里统一换算成布尔标记，避免把服务器路径暴露给前端。
+    """
+    out = DetectionResultOut.model_validate(result)
+    out.has_result_image = bool(getattr(result, "result_image_path", None))
+    return out
 
 
 class SettingItem(BaseModel):

@@ -7,13 +7,19 @@
       <p class="dicom-title">DICOM 影像</p>
       <p class="dicom-text">该格式由算法侧解析用于诊断，浏览器暂不支持在线预览。</p>
     </div>
-    <img
-      v-else-if="!hasError && resolvedSrc"
-      :src="resolvedSrc"
-      :alt="alt"
-      class="viewer-image"
-      @error="hasError = true"
-    />
+    <div v-else-if="!hasError && resolvedSrc" class="viewer-stage">
+      <img
+        :src="resolvedSrc"
+        :alt="alt"
+        class="viewer-image"
+        @load="onImageLoad"
+        @error="hasError = true"
+      />
+      <!-- 算法只回传了病灶框坐标（没回传标注图）时，在原图上叠加显示 -->
+      <div v-if="overlayStyle" class="viewer-box" :style="overlayStyle">
+        <span class="viewer-box-tag">AI 标注</span>
+      </div>
+    </div>
     <div v-else-if="hasError" class="viewer-error">
       <el-icon class="error-icon"><PictureFilled /></el-icon>
       <p class="error-text">图片加载失败</p>
@@ -29,22 +35,36 @@
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { PictureFilled, Loading, Document } from '@element-plus/icons-vue'
 import api from '../api/index'
+import { boxToPercentStyle } from '../utils/imageFit'
 
 const props = defineProps({
   src: { type: String, required: true },
   alt: { type: String, default: '' },
   mediaType: { type: String, default: '' },
+  // 病灶框 [x1,y1,x2,y2]（原图像素坐标）；不传则不叠加
+  overlayBox: { type: Array, default: null },
 })
 
 const hasError = ref(false)
 const resolvedSrc = ref('')
+const naturalSize = ref({ width: 0, height: 0 })
 let objectUrl = null
 
 const isDicom = computed(() => props.mediaType === 'application/dicom')
 
+const overlayStyle = computed(() =>
+  boxToPercentStyle(props.overlayBox, naturalSize.value.width, naturalSize.value.height)
+)
+
+function onImageLoad(event) {
+  const img = event.target
+  naturalSize.value = { width: img.naturalWidth, height: img.naturalHeight }
+}
+
 const loadImage = async (url) => {
   hasError.value = false
   resolvedSrc.value = ''
+  naturalSize.value = { width: 0, height: 0 }
 
   if (objectUrl) {
     URL.revokeObjectURL(objectUrl)
@@ -90,13 +110,40 @@ onUnmounted(() => {
   height: 100%;
 }
 
+/* 图片 + 病灶框叠加层：stage 收缩包裹图片，叠加层用百分比定位 */
+.viewer-stage {
+  position: relative;
+  display: inline-flex;
+  max-width: 100%;
+}
+
 .viewer-image {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
   max-width: 100%;
   max-height: 560px;
+  width: auto;
+  height: auto;
   display: block;
+}
+
+.viewer-box {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid var(--danger, #f56c6c);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.viewer-box-tag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 1px 6px;
+  font-size: 11px;
+  line-height: 16px;
+  color: #fff;
+  background: var(--danger, #f56c6c);
+  border-radius: 0 0 4px 0;
+  white-space: nowrap;
 }
 
 .viewer-error, .viewer-loading, .viewer-dicom {

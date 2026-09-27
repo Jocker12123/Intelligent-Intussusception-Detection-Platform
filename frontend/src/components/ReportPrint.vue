@@ -144,6 +144,8 @@
               <span class="diag-value">灌肠成功率{{ (result.treatment_success_rate * 100).toFixed(0) }}%</span>
             </div>
           </div>
+          <!-- 模型溯源：报告归档需能追溯是哪个模型/版本产出的结果 -->
+          <div class="model-trace" v-if="modelTraceText">{{ modelTraceText }}</div>
         </div>
 
         <!-- 治疗建议 -->
@@ -292,6 +294,26 @@ const resultDescription = computed(() => {
   if (cls === '肠套叠阳性') return '超声检查显示肠套叠典型"同心圆征"及"套筒征"，套叠部位可见多层肠壁结构，CDFI显示套叠肠壁血流信号。'
   if (cls === '肠套叠阴性') return '超声检查未见明确肠套叠征象，肠壁结构清晰，未见"同心圆征"及"套筒征"，CDFI显示肠壁血流信号正常。'
   return '图像质量欠佳，无法满足诊断要求，建议重新采集超声影像。'
+})
+
+// 模型溯源：优先分别展示 检测(A) / 分类(B)，旧数据回退到单一模型名
+const modelTraceText = computed(() => {
+  const r = props.result
+  if (!r) return ''
+  const parts = []
+  if (r.detection_model_name) {
+    parts.push(`检测模型：${r.detection_model_name}${r.detection_model_version ? ` v${r.detection_model_version}` : ''}`)
+  }
+  if (r.classification_model_name) {
+    parts.push(`分类模型：${r.classification_model_name}${r.classification_model_version ? ` v${r.classification_model_version}` : ''}`)
+  }
+  if (!parts.length && r.model_name) {
+    parts.push(`分析模型：${r.model_name}${r.model_version ? ` v${r.model_version}` : ''}`)
+  }
+  if (!parts.length) return ''
+  let text = parts.join('　')
+  if (r.inference_ms != null) text += `　（总耗时 ${r.inference_ms}ms）`
+  return text
 })
 
 async function onPreviewOpened() {
@@ -566,6 +588,16 @@ async function handlePrint() {
 .diag-value {
   font-size: 14px;
   color: #000;
+}
+
+/* 模型溯源行（写在诊断结果下方，随报告一起打印） */
+.model-trace {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed #bbb;
+  font-size: 12px;
+  color: #555;
+  font-family: 'SimHei', 'Microsoft YaHei', sans-serif;
 }
 
 .diag-badge {

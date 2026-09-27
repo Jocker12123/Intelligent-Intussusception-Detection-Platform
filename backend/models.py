@@ -79,6 +79,16 @@ class DetectionResult(Base):
     model_version = Column(String(50), nullable=True)    # 模型版本
     inference_ms = Column(Float, nullable=True)          # 推理耗时(毫秒)
     class_probabilities = Column(Text, nullable=True)    # 各分类概率(JSON 文本)
+    # ---- 双模型溯源：检测模块(A) 与 分类模块(B) 各自的模型信息 ----
+    detection_model_name = Column(String(100), nullable=True)          # A：检测模型名
+    detection_model_version = Column(String(50), nullable=True)        # A：检测模型版本
+    classification_model_name = Column(String(100), nullable=True)     # B：分类模型名
+    classification_model_version = Column(String(50), nullable=True)   # B：分类模型版本
+    detection_ms = Column(Float, nullable=True)                        # A：检测耗时(毫秒)
+    classification_ms = Column(Float, nullable=True)                   # B：分类耗时(毫秒)
+    detection_score = Column(Float, nullable=True)                     # A：检测置信度 0~1
+    roi_box = Column(Text, nullable=True)                              # A：病灶框 JSON 文本 [x1,y1,x2,y2]
+    result_image_path = Column(String(500), nullable=True)             # A：带病灶框的标注图存盘路径
     created_at = Column(DateTime, default=utcnow)
 
     image = relationship("Image", back_populates="detection_result")

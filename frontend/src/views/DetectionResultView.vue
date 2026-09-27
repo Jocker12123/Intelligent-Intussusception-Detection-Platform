@@ -44,9 +44,22 @@
           <div class="patient-bar-divider"></div>
           <div class="patient-bar-item">
             <div class="bar-label">模型</div>
-            <div class="bar-value">
-              <span>{{ result.model_name || '—' }}<template v-if="result.model_version"> v{{ result.model_version }}</template><template v-if="result.inference_ms != null"> · {{ result.inference_ms }}ms</template></span>
+            <!-- 双模型溯源：检测(A) / 分类(B) 分别展示 -->
+            <div class="bar-value model-value" v-if="hasPipelineModels">
+              <span class="model-line">
+                <span class="model-role">检测</span>
+                <span class="model-name">{{ result.detection_model_name || '—' }}<template v-if="result.detection_model_version"> v{{ result.detection_model_version }}</template></span>
+                <span v-if="result.detection_ms != null" class="model-meta">{{ result.detection_ms }}ms</span>
+                <span v-if="result.detection_score != null" class="model-meta">score {{ result.detection_score }}</span>
+              </span>
+              <span class="model-line">
+                <span class="model-role">分类</span>
+                <span class="model-name">{{ result.classification_model_name || '—' }}<template v-if="result.classification_model_version"> v{{ result.classification_model_version }}</template></span>
+                <span v-if="result.classification_ms != null" class="model-meta">{{ result.classification_ms }}ms</span>
+              </span>
             </div>
+            <!-- 旧数据 / Mock 回退：只有一个整体模型名 -->
+            <div class="bar-value" v-else>{{ legacyModelText }}</div>
           </div>
         </div>
 
@@ -59,9 +72,20 @@
                 <el-icon><Picture /></el-icon>
               </div>
               <h3>超声影像</h3>
+              <!-- 算法回传了标注图时，提供 原图 / 标注图 切换 -->
+              <el-radio-group v-if="hasAnnotatedImage" v-model="imageMode" size="small" class="image-mode-switch">
+                <el-radio-button value="original">原图</el-radio-button>
+                <el-radio-button value="annotated">AI 标注图</el-radio-button>
+              </el-radio-group>
+              <span v-else-if="hasBoxOverlay" class="image-mode-hint">已叠加 AI 病灶框</span>
             </div>
             <div class="panel-body image-body">
-              <ImageViewer :src="imageUrl" alt="超声影像" :media-type="result.image?.media_type || ''" />
+              <ImageViewer
+                :src="displayImageUrl"
+                alt="超声影像"
+                :media-type="displayMediaType"
+                :overlay-box="overlayBox"
+              />
             </div>
           </div>
 
@@ -81,7 +105,7 @@
       </template>
     </div>
 
-    <ReportPrint v-model="printVisible" :patient="patient" :result="result" :image-url="imageUrl" />
+    <ReportPrint v-model="printVisible" :patient="patient" :result="result" :image-url="reportImageUrl" />
   </AppLayout>
 </template>
 
@@ -94,7 +118,7 @@ import AppLayout from '../components/AppLayout.vue'
 import ImageViewer from '../components/ImageViewer.vue'
 import ResultCard from '../components/ResultCard.vue'
 import ReportPrint from '../components/ReportPrint.vue'
-import { getResult } from '../api/results'
+import { getResult, getResultImageUrl } from '../api/results'
 import { getImageUrl } from '../api/images'
 import { getPatient } from '../api/patients'
 import { formatDateTime } from '../utils/time'
@@ -105,6 +129,7 @@ const loading = ref(false)
 const result = ref(null)
 const patient = ref(null)
 const printVisible = ref(false)
+const imageMode = ref('original')
 
 // 返回患者详情（结果中的影像包含 patient_id）；若无则返回上一页
 function handleBack() {
@@ -120,6 +145,45 @@ const imageUrl = computed(() => {
   return ''
 })
 
+// ---- 双模型溯源 ----
+const hasPipelineModels = computed(() => Boolean(
+  result.value?.detection_model_name || result.value?.classification_model_name
+))
+
+const legacyModelText = computed(() => {
+  const r = result.value
+  if (!r) return '—'
+  let text = r.model_name || '—'
+  if (r.model_version) text += ` v${r.model_version}`
+  if (r.inference_ms != null) text += ` · ${r.inference_ms}ms`
+  return text
+})
+
+// ---- 影像：原图 / AI 标注图 ----
+const hasAnnotatedImage = computed(() => Boolean(result.value?.has_result_image))
+// 算法只给了病灶框坐标（没给标注图）时，前端在原图上叠加展示
+const boxOverlay = computed(() => (hasAnnotatedImage.value ? null : (result.value?.roi_box || null)))
+const hasBoxOverlay = computed(() => Array.isArray(boxOverlay.value))
+const overlayBox = computed(() => boxOverlay.value)
+
+const displayImageUrl = computed(() => {
+  if (imageMode.value === 'annotated' && hasAnnotatedImage.value) {
+    return getResultImageUrl(result.value.id)
+  }
+  return imageUrl.value
+})
+
+// 标注图一定是普通图片；原图可能是 DICOM（不可在线预览）
+const displayMediaType = computed(() => {
+  if (imageMode.value === 'annotated' && hasAnnotatedImage.value) return ''
+  return result.value?.image?.media_type || ''
+})
+
+// 报告优先用标注图，其次用原图
+const reportImageUrl = computed(() => (
+  hasAnnotatedImage.value ? getResultImageUrl(result.value.id) : imageUrl.value
+))
+
 const classificationClass = computed(() => {
   const map = {
     '肠套叠阳性': 'badge-danger',
@@ -134,6 +198,10 @@ async function fetchResult() {
   try {
     const res = await getResult(route.params.id)
     result.value = res.data
+    // 原图是 DICOM 时浏览器无法预览，若算法给了标注图则默认展示标注图
+    if (hasAnnotatedImage.value && result.value?.image?.media_type === 'application/dicom') {
+      imageMode.value = 'annotated'
+    }
     if (result.value.image) {
       const imgInfo = result.value.image
       try {
@@ -217,6 +285,44 @@ onMounted(fetchResult)
   font-weight: 600;
   color: var(--text-primary);
 }
+
+/* 双模型：检测 / 分类 各一行 */
+.model-value {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-weight: 500;
+}
+.model-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.model-role {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  padding: 0 6px;
+  height: 18px;
+  border-radius: 4px;
+  background: var(--primary-glow);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 600;
+}
+.model-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.model-meta {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
 .mini-badge {
   display: inline-flex;
   align-items: center;
@@ -276,6 +382,18 @@ onMounted(fetchResult)
   color: var(--text-primary);
   margin: 0;
   letter-spacing: 0.02em;
+}
+/* 影像面板右上角：原图 / AI 标注图 切换 */
+.image-mode-switch {
+  margin-left: auto;
+}
+.image-mode-hint {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--primary);
+  background: var(--primary-glow);
+  padding: 2px 10px;
+  border-radius: 10px;
 }
 .panel-body {
   padding: 18px;

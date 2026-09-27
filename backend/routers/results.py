@@ -1,15 +1,17 @@
 from math import ceil
 import csv
 import io
+import os
 from datetime import timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from database import get_db
 from models import DetectionResult as DetectionResultModel, Patient, User
-from schemas import DetectionResultOut, PaginatedResponse, ResultsStats
+from schemas import DetectionResultOut, PaginatedResponse, ResultsStats, detection_result_out
 from auth import get_current_user
+from services.result_images import image_media_type
 from .images import _media_type_from_path
 
 router = APIRouter(prefix="/api/results", tags=["results"])
@@ -71,7 +73,7 @@ def list_results(
     total = query.count()
     items = query.order_by(DetectionResultModel.created_at.desc()).offset((page - 1) * size).limit(size).all()
     return PaginatedResponse(
-        items=[DetectionResultOut.model_validate(r) for r in items],
+        items=[detection_result_out(r) for r in items],
         total=total, page=page, size=size, pages=max(1, ceil(total / size)),
     )
 
@@ -95,6 +97,7 @@ def export_results(
     writer.writerow([
         "ID", "患者", "性别", "年龄(月)", "病历号",
         "分类", "置信度", "严重度", "成功率", "治疗建议",
+        "检测模型", "检测版本", "分类模型", "分类版本",
         "模型", "版本", "检测时间(UTC)",
     ])
     for r in items:
@@ -111,6 +114,10 @@ def export_results(
             r.severity or "",
             r.treatment_success_rate if r.treatment_success_rate is not None else "",
             r.treatment_advice or "",
+            r.detection_model_name or "",
+            r.detection_model_version or "",
+            r.classification_model_name or "",
+            r.classification_model_version or "",
             r.model_name or "",
             r.model_version or "",
             created,
@@ -129,8 +136,27 @@ def get_result(result_id: int, db: Session = Depends(get_db), current_user: User
     result = db.query(DetectionResultModel).filter(DetectionResultModel.id == result_id).first()
     if not result:
         raise HTTPException(status_code=404, detail="Result not found")
-    out = DetectionResultOut.model_validate(result)
+    out = detection_result_out(result)
     # 补全嵌套影像的媒体类型，前端据此判断 DICOM 是否可在线预览
     if out.image:
         out.image.media_type = _media_type_from_path(result.image.filepath)
     return out
+
+
+@router.get("/{result_id}/image")
+def get_result_image(
+    result_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """返回算法回传的带病灶框标注图。
+
+    没有标注图（算法未回传 / 旧记录）时返回 404，前端会退回展示原图。
+    """
+    result = db.query(DetectionResultModel).filter(DetectionResultModel.id == result_id).first()
+    if not result:
+        raise HTTPException(status_code=404, detail="Result not found")
+    path = result.result_image_path
+    if not path or not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Result image not found")
+    return FileResponse(path, media_type=image_media_type(path))

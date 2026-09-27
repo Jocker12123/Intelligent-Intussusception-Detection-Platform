@@ -37,6 +37,14 @@ from algorithm.contracts import ClassificationOutcome, ROI
 # ⚠️ 实现完成后改为 True，适配层才会启用你的分类模块
 READY = False
 
+# ⚠️ 改成你的模型名与版本号：
+# 适配层会读取这两个常量，前端检测结果页会单独显示「分类模型」标签。
+# 请务必改掉 TODO 字样（平台上会原样展示），例如：
+#     NAME = "ResNet50-3cls"
+#     VERSION = "1.0.0"
+NAME = "TODO-分类模型名"
+VERSION = "1.0.0"
+
 
 def classify(roi: ROI) -> ClassificationOutcome:
     """分类。未实现前会抛错（适配层此时不会调用本函数）。"""

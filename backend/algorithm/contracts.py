@@ -22,12 +22,19 @@ class ROI:
            - 通常是预处理后的图（numpy.ndarray）
            - 若检测模块不方便裁剪，也可直接放原图（约定"全图送分类"）
     box:   病灶在原图中的框 (x1, y1, x2, y2)，**可选**。
-           目前平台暂不展示病灶框，先保留着，将来要展示时可直接用。
+           只给坐标时，平台前端会在原图上叠加显示病灶框。
     score: 检测置信度（0~1），**可选**。
+    annotated_image: **带病灶框的标注图**，可选，支持三种形态：
+           - bytes / bytearray  已编码的 JPEG/PNG 字节（推荐，零依赖）
+           - str / Path         你自己写好的图片文件路径
+           - numpy.ndarray      H×W 或 H×W×3 数组（需安装 pillow）
+           给了它，平台会存盘并在结果页提供「AI 标注图」切换、打印报告也优先用它；
+           此时前端不再叠加 box 坐标（避免同一个框画两次）。
     """
     image: Any
     box: Optional[Tuple[int, int, int, int]] = None
     score: Optional[float] = None
+    annotated_image: Any = None
 
 
 @dataclass

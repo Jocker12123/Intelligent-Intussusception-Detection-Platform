@@ -20,6 +20,33 @@ DetectionResult 字段:
 注意: severity / treatment_success_rate / treatment_advice 都可以忽略不填，
 平台会按分类给出默认值，不会让你的代码因为缺字段报错。
 
+双模型溯源字段（**推荐填，但不是必填**）:
+    detection_model_name / detection_model_version         检测模块(A)的模型名与版本
+    classification_model_name / classification_model_version 分类模块(B)的模型名与版本
+
+    最省事的做法：不要在这个函数里手填，而是到你自己的模块里声明两个常量
+    （`backend/algorithm/detection/__init__.py` 与 `classification/__init__.py`）:
+
+        NAME = "你的模型名"
+        VERSION = "1.0.0"
+
+    适配层 pipeline.py 会自动读取它们并填好上面四个字段，前端会分别展示
+    「检测模型」与「分类模型」两个标签；不填则退回显示整体 pipeline 名称。
+    分段耗时 detection_ms / classification_ms、检测置信度 detection_score、
+    病灶框 roi_box 同样由适配层自动填充，算法侧不用管。
+
+病灶框与标注图（给检测模块 A）:
+    roi_box        tuple    可选. (x1, y1, x2, y2) 原图像素坐标。
+                            只给坐标时，前端会在原图上叠加显示病灶框。
+    result_image            可选. 带病灶框的标注图，平台会存盘，结果页可切换查看
+                            「AI 标注图」，打印报告也优先用这张图。
+                            支持三种形态，按方便程度任选：
+                              1) bytes         —— 已编码的 JPEG/PNG 字节（推荐，零依赖）
+                              2) str / Path    —— 你自己写好的图片文件路径
+                              3) numpy.ndarray —— H×W 或 H×W×3 数组（需安装 pillow）
+                            ⚠️ 同时给 result_image 与 roi_box 时，前端以标注图为准，
+                               不再叠加坐标框（避免同一个病灶框画两次）。
+
 推荐写法（最小示例，仅写必填项也能跑通）:
     from pathlib import Path
     from algorithm.interface import DetectionResult
@@ -38,7 +65,7 @@ import hashlib
 import random
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 
 @dataclass
@@ -57,10 +84,61 @@ class DetectionResult:
     # 平台会校验并归一化；若未提供，则前端用 confidence 兜底展示。
     class_probabilities: Optional[dict] = None
 
+    # ---- 双模型溯源（可选，通常由适配层 pipeline 自动填充）----
+    # 检测模块(A) / 分类模块(B) 各自的模型名与版本
+    detection_model_name: str = ""
+    detection_model_version: str = ""
+    classification_model_name: str = ""
+    classification_model_version: str = ""
+    # 分段耗时（毫秒）：A 的检测耗时、B 的分类耗时
+    detection_ms: Optional[float] = None
+    classification_ms: Optional[float] = None
+    # 检测原始输出（可选）：A 给出的检测置信度与病灶框 (x1,y1,x2,y2) 原图坐标
+    detection_score: Optional[float] = None
+    roi_box: Optional[tuple] = None
+    # 带病灶框的标注图（可选）：bytes / 文件路径 / numpy.ndarray，
+    # 平台负责存盘与展示，形态由 services/result_images.py 统一处理。
+    result_image: Any = None
+
 
 # 平台认可的分类集合（用于校验算法返回是否合法）
 VALID_CLASSIFICATIONS = {"肠套叠阳性", "肠套叠阴性", "图像质量不佳"}
 VALID_SEVERITIES = {"轻度", "中度", "重度"}
+
+# 模型元数据落库长度上限（与 models.py 的列定义一致，超出会被截断）
+_MAX_NAME_LEN = 100
+_MAX_VERSION_LEN = 50
+
+
+def _clean_text(value, limit: int) -> str:
+    """把模型名/版本号规整成可安全落库的字符串（去空白 + 限长）。"""
+    if value is None:
+        return ""
+    return str(value).strip()[:limit]
+
+
+def _clean_ms(value) -> Optional[float]:
+    """耗时规整：非负数、保留 2 位小数；非法值返回 None。"""
+    if value is None:
+        return None
+    try:
+        ms = float(value)
+    except (TypeError, ValueError):
+        return None
+    if ms < 0:
+        return None
+    return round(ms, 2)
+
+
+def _clean_box(box) -> Optional[tuple]:
+    """病灶框规整成 (x1,y1,x2,y2) 整数元组；长度/类型不对则丢弃。"""
+    if box is None:
+        return None
+    try:
+        x1, y1, x2, y2 = (int(v) for v in box)
+    except (TypeError, ValueError):
+        return None
+    return (x1, y1, x2, y2)
 
 
 def _default_advice(classification: str, severity: Optional[str] = None,
@@ -82,6 +160,7 @@ def validate_result(result: DetectionResult) -> DetectionResult:
     - 分类不在合法集合内时，按"图像质量不佳"兜底
     - 置信度收敛到 [0, 1]
     - 必填缺省项自动补齐
+    - 模型名/版本去空白并限长，耗时为非负数，病灶框必须是 4 个整数
     """
     classification = result.classification if result.classification in VALID_CLASSIFICATIONS else "图像质量不佳"
     confidence = max(0.0, min(1.0, float(result.confidence or 0.0)))
@@ -94,15 +173,31 @@ def validate_result(result: DetectionResult) -> DetectionResult:
         rate = None
     advice = result.treatment_advice or _default_advice(classification, severity, rate)
     probs = _normalize_probabilities(result.class_probabilities, classification, confidence)
+    score = result.detection_score
+    if score is not None:
+        try:
+            score = max(0.0, min(1.0, float(score)))
+        except (TypeError, ValueError):
+            score = None
     return DetectionResult(
         classification=classification,
         confidence=confidence,
         severity=severity,
         treatment_success_rate=rate,
         treatment_advice=advice,
-        model_name=result.model_name or "",
-        model_version=result.model_version or "",
+        model_name=_clean_text(result.model_name, _MAX_NAME_LEN),
+        model_version=_clean_text(result.model_version, _MAX_VERSION_LEN),
         class_probabilities=probs,
+        detection_model_name=_clean_text(result.detection_model_name, _MAX_NAME_LEN),
+        detection_model_version=_clean_text(result.detection_model_version, _MAX_VERSION_LEN),
+        classification_model_name=_clean_text(result.classification_model_name, _MAX_NAME_LEN),
+        classification_model_version=_clean_text(result.classification_model_version, _MAX_VERSION_LEN),
+        detection_ms=_clean_ms(result.detection_ms),
+        classification_ms=_clean_ms(result.classification_ms),
+        detection_score=score,
+        roi_box=_clean_box(result.roi_box),
+        # 标注图原样透传（图片数据的合法性/存盘由 services/result_images.py 负责）
+        result_image=result.result_image,
     )
 
 
@@ -179,4 +274,7 @@ def detect_intussusception(image_path: Path) -> DetectionResult:
         model_name="Mock",
         model_version="1.0.0",
         class_probabilities=probs,
+        # Mock 是整条流水线的占位实现（没有真正的检测/分类模型），
+        # 因此 detection_* / classification_* 一律留空：
+        # 前端会回退成「Mock v1.0.0」这种整体标签，而不是伪造两个模型名。
     )

@@ -53,6 +53,10 @@ def main() -> int:
     print(f"treatment_advice       : {result.treatment_advice}")
     print(f"class_probabilities    : {result.class_probabilities}")
     print(f"model_name / version   : {result.model_name} / {result.model_version}")
+    print(f"检测模型(A)            : {result.detection_model_name} / {result.detection_model_version}"
+          f"  ({result.detection_ms} ms, score={result.detection_score}, box={result.roi_box})")
+    print(f"分类模型(B)            : {result.classification_model_name} / {result.classification_model_version}"
+          f"  ({result.classification_ms} ms)")
 
     # ---- 合法性校验 ----
     ok = True
@@ -65,6 +69,12 @@ def main() -> int:
     if result.class_probabilities and not isinstance(result.class_probabilities, dict):
         print("[FAIL] class_probabilities 必须是 dict")
         ok = False
+    # 真实流水线下提醒补全模型名（前端会原样展示，TODO 字样会被医生看到）
+    if is_real_ready():
+        for role, name in (("检测(A)", result.detection_model_name), ("分类(B)", result.classification_model_name)):
+            if not name or "TODO" in name.upper():
+                print(f"[WARN] {role} 的模型名未填写（当前: {name!r}）："
+                      f"请在对应模块的 __init__.py 里设置 NAME / VERSION")
 
     print("-" * 52)
     print("结果: " + ("[OK] 格式合法，可以交付" if ok else "[FAIL] 格式有问题，请修正"))

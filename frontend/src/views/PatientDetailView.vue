@@ -228,7 +228,12 @@
                     <div class="timeline-card-body">
                       <span v-if="d.severity" class="tl-sev">等级：{{ d.severity }}</span>
                       <span v-if="d.treatment_success_rate != null" class="tl-sev">成功率 {{ Math.round(d.treatment_success_rate * 100) }}%</span>
-                      <span v-if="d.model_name" class="tl-model">{{ d.model_name }}<template v-if="d.model_version"> v{{ d.model_version }}</template></span>
+                      <!-- 双模型溯源：检测(A) / 分类(B) -->
+                      <template v-if="d.detection_model_name || d.classification_model_name">
+                        <span v-if="d.detection_model_name" class="tl-model">检测 {{ d.detection_model_name }}<template v-if="d.detection_model_version"> v{{ d.detection_model_version }}</template></span>
+                        <span v-if="d.classification_model_name" class="tl-model">分类 {{ d.classification_model_name }}<template v-if="d.classification_model_version"> v{{ d.classification_model_version }}</template></span>
+                      </template>
+                      <span v-else-if="d.model_name" class="tl-model">{{ d.model_name }}<template v-if="d.model_version"> v{{ d.model_version }}</template></span>
                     </div>
                     <div class="timeline-actions">
                       <el-button text size="small" @click="$router.push(`/results/${d.id}`)">查看详情</el-button>
@@ -280,7 +285,7 @@ import ImageViewer from '../components/ImageViewer.vue'
 import ReportPrint from '../components/ReportPrint.vue'
 import { getPatient } from '../api/patients'
 import { getImageInfo, getImageUrl, runDetection, createDetectionTask, getDetectionTask } from '../api/images'
-import { getResult, getResults } from '../api/results'
+import { getResult, getResults, getResultImageUrl } from '../api/results'
 import { formatDateTime, formatDateTimeCn } from '../utils/time'
 
 const route = useRoute()
@@ -428,9 +433,14 @@ async function openReport(resultId, imageId) {
   try {
     const res = await getResult(resultId)
     printResult.value = res.data
-    // 优先用传入的影像 ID，其次用结果里的 image_id（历史记录只有后者）
-    const imgId = imageId || res.data?.image_id
-    printImageUrl.value = imgId ? getImageUrl(imgId) : ''
+    // 报告优先用算法回传的标注图（带病灶框），没有则退回原图
+    if (res.data?.has_result_image) {
+      printImageUrl.value = getResultImageUrl(resultId)
+    } else {
+      // 优先用传入的影像 ID，其次用结果里的 image_id（历史记录只有后者）
+      const imgId = imageId || res.data?.image_id
+      printImageUrl.value = imgId ? getImageUrl(imgId) : ''
+    }
     printVisible.value = true
   } catch {
     ElMessage.error('获取检测结果失败')

@@ -17,6 +17,7 @@
 """
 import logging
 from pathlib import Path
+from time import perf_counter
 
 from algorithm.interface import (
     DetectionResult,
@@ -31,6 +32,11 @@ logger = logging.getLogger("uvicorn.error")
 
 # 只提示一次，避免刷屏
 _warned_mock = False
+
+
+def _module_meta(module, attr: str) -> str:
+    """读 A/B 模块里的 NAME / VERSION 常量（没定义就返回空串）。"""
+    return str(getattr(module, attr, "") or "")
 
 
 def is_real_ready() -> bool:
@@ -80,12 +86,21 @@ def detect_intussusception(image_path: Path) -> DetectionResult:
 
     # ---- 真实流水线 ----
     img = load_image(image_path)          # 1) 读图（含 DICOM）
+
+    t_det = perf_counter()
     roi = detection.detect(img)           # 2) 队友A：检测
+    detection_ms = round((perf_counter() - t_det) * 1000, 2)
+
     if roi is None:                       #    未检出病灶 → 按"全图送分类"处理
         roi = ROI(image=img)
+
+    t_cls = perf_counter()
     outcome = classification.classify(roi)  # 3) 队友B：分类
+    classification_ms = round((perf_counter() - t_cls) * 1000, 2)
 
     # 4) 组装成平台契约（validate_result 会做合法性校验与兜底）
+    #    双模型溯源：读取 A/B 各自模块里的 NAME/VERSION 常量（没定义则为空，
+    #    前端会回退显示整体 pipeline 名称，不会报错）。
     return validate_result(DetectionResult(
         classification=outcome.classification,
         confidence=outcome.confidence,
@@ -95,4 +110,14 @@ def detect_intussusception(image_path: Path) -> DetectionResult:
         class_probabilities=outcome.class_probabilities,
         model_name="team-pipeline",
         model_version="1.0",
+        detection_model_name=_module_meta(detection, "NAME"),
+        detection_model_version=_module_meta(detection, "VERSION"),
+        classification_model_name=_module_meta(classification, "NAME"),
+        classification_model_version=_module_meta(classification, "VERSION"),
+        detection_ms=detection_ms,
+        classification_ms=classification_ms,
+        detection_score=getattr(roi, "score", None),
+        roi_box=getattr(roi, "box", None),
+        # A 若回传了带病灶框的标注图，一并交给平台存盘/展示
+        result_image=getattr(roi, "annotated_image", None),
     ))

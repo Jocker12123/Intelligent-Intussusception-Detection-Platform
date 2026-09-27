@@ -19,6 +19,16 @@ async def lifespan(app: FastAPI):
         "model_version": "VARCHAR(50)",
         "inference_ms": "FLOAT",
         "class_probabilities": "TEXT",
+        # 双模型溯源（检测A / 分类B）
+        "detection_model_name": "VARCHAR(100)",
+        "detection_model_version": "VARCHAR(50)",
+        "classification_model_name": "VARCHAR(100)",
+        "classification_model_version": "VARCHAR(50)",
+        "detection_ms": "FLOAT",
+        "classification_ms": "FLOAT",
+        "detection_score": "FLOAT",
+        "roi_box": "TEXT",
+        "result_image_path": "VARCHAR(500)",
     })
     ensure_columns("patients", {
         "hospital_no": "VARCHAR(50)",

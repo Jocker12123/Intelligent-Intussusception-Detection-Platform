@@ -6,9 +6,10 @@ from sqlalchemy.orm import Session
 from config import UPLOAD_DIR, ALLOWED_IMAGE_TYPES, MAX_UPLOAD_SIZE
 from database import get_db
 from models import Image, Patient, User, DetectionResult as DetectionResultModel
-from schemas import ImageInfo, DetectionResultOut
+from schemas import ImageInfo, DetectionResultOut, detection_result_out
 from auth import get_current_user, can_manage
 from services.detection import DetectionService
+from services.result_images import remove_result_image
 from services.audit import record_audit
 
 router = APIRouter(prefix="/api/images", tags=["images"])
@@ -128,6 +129,9 @@ def delete_image(image_id: int, request: Request, db: Session = Depends(get_db),
     filename = image.filename
     if os.path.exists(image.filepath):
         os.remove(image.filepath)
+    # 级联删除会产生孤儿标注图，这里一并清掉
+    for det in db.query(DetectionResultModel).filter(DetectionResultModel.image_id == image_id).all():
+        remove_result_image(det.result_image_path)
     record_audit(db, current_user, action="delete", resource="image", resource_id=image_id,
                  detail=f"删除影像：{filename}", request=request)
     db.delete(image)
@@ -142,7 +146,7 @@ def run_detection(image_id: int, request: Request, force: bool = False, db: Sess
         raise HTTPException(status_code=404, detail="Image not found")
     existing = db.query(DetectionResultModel).filter(DetectionResultModel.image_id == image_id).first()
     if existing and not force:
-        return existing
+        return detection_result_out(existing)
     try:
         result = DetectionService.run_detection(image, db)
     except FileNotFoundError:
@@ -152,4 +156,4 @@ def run_detection(image_id: int, request: Request, force: bool = False, db: Sess
     record_audit(db, current_user, action="detect", resource="image", resource_id=image_id,
                  detail=f"发起检测：{image.filename} → {result.classification}", request=request)
     db.commit()
-    return result
+    return detection_result_out(result)
