@@ -1,0 +1,28 @@
+# 算法侧额外依赖（平台原有 requirements.txt 里没有）
+#
+# 安装方式（在平台 backend 的虚拟环境里）：
+#     cd backend
+#     .\venv\Scripts\python.exe -m pip install -r algorithm\requirements-algorithm.txt
+#
+# 若不想在平台 venv 里装 torch（体积大），也可以直接用本机已有的 conda 环境启动：
+#     cd backend
+#     D:\Program\miniconda3\envs\detect\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+# 该环境已含 ultralytics 8.4.56 + torch 2.12.0+cpu，可直接跑通。
+
+# ── 平台适配层 (algorithm/pipeline.py) 需要的图像 I/O ──
+# pipeline.load_image() 用 Pillow 读 jpg/png/bmp、用 numpy 承接数组，均为硬依赖
+pillow>=10.0
+numpy>=1.24
+
+# ── 模型推理 ──
+# 权重由 ultralytics 8.4.150 训练；推理阶段 8.4.56 / 8.4.159 已实测一致（对已使用的检出 <5e-6），
+# 且本地 8.4.56 与 Kaggle 已逐位复现同一混淆矩阵，因此此处钉 8.4.56。
+ultralytics==8.4.56
+
+# ── 可选：DICOM 输入 ──
+# 平台只把 .dcm 原样存盘，像素解析由算法侧负责（pipeline.load_image 会尝试 import pydicom）。
+#
+# 已实测可解码（无需额外依赖）：未压缩（显式/隐式 VR）· 多帧 cine · RLE 无损 ·
+#                              JPEG Baseline · JPEG2000（后两者由 Pillow 提供解码插件）
+# 未覆盖：JPEG-LS —— 需额外解码器（如 pyjpegls 或 gdcm），超声设备较少使用
+pydicom>=2.4

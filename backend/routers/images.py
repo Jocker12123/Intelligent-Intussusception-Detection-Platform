@@ -52,15 +52,16 @@ async def upload_image(
     content = await file.read()
     if len(content) > MAX_UPLOAD_SIZE:
         raise HTTPException(status_code=413, detail="File too large (max 20MB)")
-    # 前端允许的类型清单
-    if file.content_type not in ALLOWED_IMAGE_TYPES:
-        raise HTTPException(status_code=400, detail=f"Unsupported type: {file.content_type}")
-    # 字节级校验：声明的类型必须与真实内容一致，防止伪造/损坏文件
+    # 字节级校验：以**真实内容**为准（客户端声明的 content_type 只作为兜底依据）。
+    # 注意：浏览器选 .dcm 时 File.type 常为空串 -> multipart 该部分没有 Content-Type，
+    # 此时 file.content_type 为 None；若只看声明值会把合法的 DICOM 挡在门外。
     sniffed = _sniff_image_type(content)
     if not sniffed:
         raise HTTPException(status_code=400, detail="文件内容无法识别，请上传有效的 JPG/PNG/BMP/DICOM 影像")
+    if file.content_type not in ALLOWED_IMAGE_TYPES and sniffed not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=400, detail=f"Unsupported type: {file.content_type}")
     # 对普通图片，要求声明的类型与真实类型一致；DICOM 允许（算法侧自行解析）
-    if sniffed != "application/dicom" and sniffed != file.content_type:
+    if sniffed != "application/dicom" and file.content_type and sniffed != file.content_type:
         raise HTTPException(
             status_code=400,
             detail=f"文件内容与声明类型不符（实际为 {sniffed}）",
