@@ -228,7 +228,9 @@ def detect_intussusception(image_path: Path) -> DetectionResult:
     """Mock 实现（演示用）。
 
     提示: 这是平台内置的占位实现，用于在没有真实模型时跑通前后端流程。
-    算法团队实现真实模型时，替换本函数即可（保持函数名和签名不变）。
+    真实模型**不要改这里**：新架构下请实现 `algorithm/detection/` 与 `algorithm/classification/`
+    两个子模块、把各自的 `READY` 置为 True，`pipeline.py` 会自动切到真实流水线；
+    本函数只在两模块未就绪时作为兜底。
 
     为保证可复现（同一张图多次检测结果一致），用文件内容哈希作随机种子，
     而不是每次随机——这样演示数据更稳定、便于测试。
@@ -265,14 +267,17 @@ def detect_intussusception(image_path: Path) -> DetectionResult:
         treatment_success_rate = None
         advice = _default_advice(classification)
 
+    # ★ 明确的 Mock 标识：让调用方一眼看出这不是真实模型的结果
+    advice = "【演示用 Mock 结果，非真实模型，不可用于临床】" + advice
+
     return DetectionResult(
         classification=classification,
         confidence=confidence,
         severity=severity,
         treatment_success_rate=treatment_success_rate,
         treatment_advice=advice,
-        model_name="Mock",
-        model_version="1.0.0",
+        model_name="Mock（占位实现·非真实模型）",
+        model_version="mock-1.0.0",
         class_probabilities=probs,
         # Mock 是整条流水线的占位实现（没有真正的检测/分类模型），
         # 因此 detection_* / classification_* 一律留空：
