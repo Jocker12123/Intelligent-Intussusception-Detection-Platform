@@ -90,25 +90,48 @@ DEFAULT_CORPUS_DIRS = ("成功横断面", "失败横断面", "成功纵切面", 
 DEFAULT_HELDOUT_DIRS = ("test190_new",)
 
 
-def corpus_md5_index(corpus_dirs=None, heldout_dirs=None) -> tuple:
-    """返回 (训练语料 md5 集合, 留出测试集 md5 集合)，结果缓存到 shadow_data/corpus_md5.pkl。
+# 近似重复阈值：16x16 灰度描述子的平均绝对差。
+# 实测依据（见 p28 文档）：
+#   · 同一张图轻量重编码（改 JPEG 质量/格式）  -> 0.00021   ← 必须拦下，但精确 md5 拦不住
+#   · 语料内相邻文件（疑似同病例相邻帧）最小     -> 0.00061
+#   · 随机不同图                              最小 -> 0.02278
+# 取 0.0020：对"重编码变体"有约 10 倍余量，只会剔除近乎逐像素相同的帧。
+NEAR_DUP_TOL = 0.0020
+NEAR_DUP_SIZE = 16
 
-    注意：语料里存在“同一张图出现多次”的情况，按**内容** md5 比对，
-    不依赖文件名，避免改名后漏判。
+
+def image_descriptor(bgr) -> "np.ndarray":
+    """16x16 灰度描述子（归一化），用于识别"同一张图换了编码"的近似重复。"""
+    import numpy as np
+    import cv2
+    g = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY) if bgr.ndim == 3 else bgr
+    return (cv2.resize(g, (NEAR_DUP_SIZE, NEAR_DUP_SIZE),
+                       interpolation=cv2.INTER_AREA).astype(np.float32) / 255.0).ravel()
+
+
+def corpus_md5_index(corpus_dirs=None, heldout_dirs=None) -> tuple:
+    """返回 (训练语料 md5 集合, 留出 md5 集合, 训练语料描述子表, 留出描述子表)。
+
+    结果缓存到 shadow_data/corpus_md5.pkl。
+    说明：语料里存在"同一张图出现多次"的情况，按**内容** md5 比对，不依赖文件名；
+    另存一份下采样描述子，用于识别"换了编码但内容相同"的近似重复 —— 实测精确 md5
+    拦不住这种（同一张图改 JPEG 质量后 md5 就变了）。
     """
     import hashlib
     import numpy as np
     cache = shadow.SHADOW_DIR / "corpus_md5.pkl"
     if cache.exists():
         try:
-            tr, ho = pickle.load(open(cache, "rb"))
-            return set(tr), set(ho)
+            obj = pickle.load(open(cache, "rb"))
+            if len(obj) == 4:                     # 新版：含描述子表
+                tr, ho, trd, hod = obj
+                return set(tr), set(ho), np.asarray(trd), np.asarray(hod)
         except Exception:
             pass
     from algorithm.pipeline import load_image
 
     def _scan(names):
-        out = set()
+        out, descs = set(), []
         for d in names:
             p = Path(d)
             if p.is_absolute():
@@ -124,19 +147,21 @@ def corpus_md5_index(corpus_dirs=None, heldout_dirs=None) -> tuple:
                     continue
                 try:
                     b = model_core.to_bgr(load_image(f))
-                    if b is not None:
-                        out.add(hashlib.md5(np.ascontiguousarray(b).tobytes()).hexdigest())
+                    if b is None:
+                        continue
+                    out.add(hashlib.md5(np.ascontiguousarray(b).tobytes()).hexdigest())
+                    descs.append(image_descriptor(b))
                 except Exception:
                     continue
-        return out
+        return out, (np.vstack(descs) if descs else np.zeros((0, NEAR_DUP_SIZE * NEAR_DUP_SIZE), np.float32))
 
-    train = _scan(corpus_dirs or DEFAULT_CORPUS_DIRS)
-    held = _scan(heldout_dirs if heldout_dirs is not None else DEFAULT_HELDOUT_DIRS)
+    train, train_d = _scan(corpus_dirs or DEFAULT_CORPUS_DIRS)
+    held, held_d = _scan(heldout_dirs if heldout_dirs is not None else DEFAULT_HELDOUT_DIRS)
     try:
-        pickle.dump((train, held), open(cache, "wb"))
+        pickle.dump((train, held, train_d, held_d), open(cache, "wb"))
     except Exception:
         pass
-    return train, held
+    return train, held, train_d, held_d
 
 
 def load_image_bgr(path: Path):
@@ -212,15 +237,24 @@ def main() -> int:
     #   据此定出的阈值会偏低）。命中即跳过，并在日志里明确说明。
     if a.keep_in_sample:
         corpus, heldout = set(), set()
+        corpus_d = heldout_d = np.zeros((0, NEAR_DUP_SIZE * NEAR_DUP_SIZE), np.float32)
     else:
-        corpus, heldout = corpus_md5_index(a.corpus_dirs, a.heldout_dirs)
+        corpus, heldout, corpus_d, heldout_d = corpus_md5_index(a.corpus_dirs, a.heldout_dirs)
     if corpus or heldout:
-        print(f"排除清单：训练语料 {len(corpus)} 张、留出测试集 {len(heldout)} 张（命中者跳过，不计入标定）")
+        print(f"排除清单：训练语料 {len(corpus)} 张、留出测试集 {len(heldout)} 张"
+              f"（精确 md5 + 近似重复 双重比对，命中者跳过、不计入标定）")
     else:
         print("[提醒] 未找到训练语料/测试集目录，跳过排除 —— 若这些影像是模型见过或用于评测的，"
               "标定结果会失真，请确认数据来自部署后的新影像")
 
-    n_ok = n_skip = n_fail = n_in = n_ho = 0
+    def near_dup(bgr, descs) -> bool:
+        """与排除清单里任何一张"近乎逐像素相同"则视为同一张（换编码也认得出）。"""
+        if descs is None or len(descs) == 0:
+            return False
+        d = image_descriptor(bgr)
+        return bool((np.abs(descs - d).mean(axis=1) <= NEAR_DUP_TOL).any())
+
+    n_ok = n_skip = n_fail = n_in = n_ho = n_dup = 0
     labels = {}
     for i, f in enumerate(todo, 1):
         bgr = load_image_bgr(f)
@@ -237,6 +271,13 @@ def main() -> int:
         if key in heldout:
             n_ho += 1
             continue                      # 留出测试集 → 不能用于标定（会变成测试集调参）
+        # 近似重复：同一张图换了编码/质量后 md5 会变，精确比对拦不住（实测差 0.685/255 就绕过）
+        if near_dup(bgr, corpus_d):
+            n_dup += 1
+            continue
+        if near_dup(bgr, heldout_d):
+            n_dup += 1
+            continue
         try:
             deployed = model_core.score_with(model_core.POLICY, bgr, enforce_deploy_guard=True)
             cand = model_core.score_with(a.policy, bgr, enforce_deploy_guard=False)
@@ -289,11 +330,13 @@ def main() -> int:
         print(f"已写入 {len(labels)} 条已知标签 -> {lab_path}")
 
     print(f"\n完成：新增 {n_ok}，跳过(已存在) {n_skip}，样本内剔除 {n_in}，测试集剔除 {n_ho}，"
-          f"失败 {n_fail}，用时 {(time.time()-t0)/60:.1f} min")
+          f"近重复剔除 {n_dup}，失败 {n_fail}，用时 {(time.time()-t0)/60:.1f} min")
     if n_in:
         print(f"  ※ {n_in} 张命中训练语料、已跳过：模型见过它们，据此标定会偏低")
     if n_ho:
         print(f"  ※ {n_ho} 张命中留出测试集、已跳过：拿评测集标定等于测试集调参")
+    if n_dup:
+        print(f"  ※ {n_dup} 张与排除清单里的影像近乎逐像素相同（换了编码/质量，md5 已变）")
     print(f"累计去重 {len(done)} 张。下一步：python -m algorithm.calibrate_shadow --export")
     return 0
 
