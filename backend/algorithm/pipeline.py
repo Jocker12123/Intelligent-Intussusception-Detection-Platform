@@ -128,6 +128,8 @@ def detect_intussusception(image_path: Path) -> DetectionResult:
         classification_ms=classification_ms,
         detection_score=getattr(roi, "score", None),
         roi_box=getattr(roi, "box", None),
+        # 旋转框四角点（像素，8 个数）：保留 OBB 真实形状，避免下游按外接矩形算指标时白掉精度
+        roi_polygon=getattr(roi, "polygon", None),
         # A 若回传了带病灶框的标注图，一并交给平台存盘/展示
         result_image=getattr(roi, "annotated_image", None),
     ))

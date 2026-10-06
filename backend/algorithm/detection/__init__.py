@@ -110,12 +110,16 @@ def detect(image: Any) -> Optional[ROI]:
     positive = score >= float(res["threshold"])
 
     box = None
+    polygon = None
     if positive and res["box"] is not None:
         h, w = bgr.shape[:2]
         pts = res["box"] if isinstance(res["box"], list) else list(res["box"])
         xs = [p[0] for p in pts]
         ys = [p[1] for p in pts]
+        # 兼容用的外接矩形（丢旋转）
         box = (int(min(xs) * w), int(min(ys) * h), int(max(xs) * w), int(max(ys) * h))
+        # ★ 旋转框四角点（像素）—— 保留模型的真实输出，避免 R@IoU 0.75 白掉 10+pp
+        polygon = tuple(int(round(v)) for p in pts for v in (p[0] * w, p[1] * h))
 
     text = (f"AI 检出疑似病灶  证据分 {score:.3f}"
             if box is not None else f"AI 未检出明确病灶  证据分 {score:.3f}")
@@ -123,4 +127,4 @@ def detect(image: Any) -> Optional[ROI]:
         text += f"  （cine 共抽 {len(frames)} 帧，取最佳帧）"
     annotated = model_core.render_annotation(bgr, res["box"] if box is not None else None, text)
 
-    return ROI(image=image, box=box, score=score, annotated_image=annotated)
+    return ROI(image=image, box=box, polygon=polygon, score=score, annotated_image=annotated)

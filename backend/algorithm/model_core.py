@@ -189,6 +189,7 @@ POLICIES = {
         "threshold": 0.014451,
         "pairs": [["intussusception-obb-v1-large.pt", "intussusception-obb-v1-compact.pt"]],
         "fusion": "single",           # 单委员会
+        "box_source": "compact",      # 病灶框只取紧凑档成员（见 score_with 里的实测依据）
         "version": "1.0.0",
         "latency_models": 2,
     },
@@ -217,6 +218,7 @@ POLICIES = {
         "threshold": 0.014451,        # 与 v1 相同的、已标定的判定阈值
         "pairs": [["intussusception-obb-v1-large.pt", "intussusception-obb-v1-compact.pt"]],
         "fusion": "single",
+        "box_source": "compact",      # 同 v1：只取紧凑档成员的框
         "version": "1.0.1+rescue",
         "latency_models": 2,          # 主判定 2 个模型；仅补救时才用到 8 个
         "rescue_pairs": [             # 补救用的强判别力组合（与 v2 同口径的 4 对）
@@ -531,10 +533,19 @@ def score_with(policy_name: str, bgr: np.ndarray, enforce_deploy_guard: bool = F
     pair_scores = []
     best_box = None
     best_conf = -1.0
+    compact_box = None          # 紧凑档成员的最高分框（见下方 box_source 说明）
+    compact_conf = -1.0
     for pair in cfg["pairs"]:
         dets = _dets_per_model(pair, bgr)
         s, idx = _committee_score(dets, pair)
         pair_scores.append(s)
+        for name in pair:
+            if "compact" not in name:
+                continue
+            for res in ("640", "1280"):
+                for conf, box in dets.get(name, {}).get(res, []):
+                    if float(conf) > compact_conf:
+                        compact_conf, compact_box = float(conf), box
         if idx is not None:
             items = []
             for mi, name in enumerate(pair):
@@ -546,6 +557,16 @@ def score_with(policy_name: str, bgr: np.ndarray, enforce_deploy_guard: bool = F
                 best_box = items[idx][2]
     total = float(np.mean(pair_scores)) if cfg["fusion"] == "mean" else float(pair_scores[0])
     threshold = float(cfg["threshold"])
+    # ── 病灶框来源（box_source）──
+    # "committee"：取委员会里置信度最高的那个框（旧行为）
+    # "compact"  ：只取**紧凑档成员**的框 ← 现默认
+    # 依据（test190 留出集 190 张正样本，判定口径完全不变，只换框）：
+    #   委员会取最高分   R@IoU 0.30/0.50/0.75 = 96.3% / 91.6% / 72.1%
+    #   只用 compact 成员 R@IoU 0.30/0.50/0.75 = 96.3% / 93.7% / 74.2%
+    # 只用 large 成员    R@IoU 0.30/0.50/0.75 = 94.7% / 88.4% / 63.7%
+    # 原因：委员会跨模型取最高分会挑中 large 档的框，而 large 档框明显更差。
+    if cfg.get("box_source", "committee") == "compact" and compact_box is not None:
+        best_box, best_conf = compact_box, compact_conf
     out = {"score": total, "primary_score": total, "rescue_score": None,
            "box": best_box, "box_conf": best_conf, "threshold": threshold,
            "policy": policy_name, "version": cfg["version"], "positive": total >= threshold}
